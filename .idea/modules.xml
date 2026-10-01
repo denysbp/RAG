@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/examples-online-structured-outputs.iml" filepath="$PROJECT_DIR$/.idea/examples-online-structured-outputs.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/rag.iml" filepath="$PROJECT_DIR$/.idea/rag.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/vllm.iml" filepath="$PROJECT_DIR$/.idea/vllm.iml" />
+    </modules>
+  </component>
+</project>
