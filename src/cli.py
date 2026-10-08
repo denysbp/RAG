@@ -1,5 +1,5 @@
 import fire
-from src import CliError
+from src.exceptions import CliError
 from typing import Any
 
 
@@ -15,20 +15,21 @@ class Cli:
         self,
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
     ) -> None:
+        print(type(max_chunk_size))
         if self.numbers_validator(max_chunk_size):
-            self.arguments["index"] = max_chunk_size
+            self.arguments["index"] = int(max_chunk_size)
 
     def search(
         self,
         query: str,
         k: str
     ) -> None:
-            if self.numbers_validator(k):
-                values = {}
-                values["query"] = query
-                values["k"] = k
-                self.arguments["search"] = values.copy()
-                del values
+        if self.numbers_validator(k):
+            values = {}
+            values["query"] = query
+            values["k"] = k
+            self.arguments["search"] = values.copy()
+            del values
 
     def search_dataset(
         self,
@@ -87,9 +88,6 @@ class Cli:
         {invalids}, we expected integer values.
         """
         raise CliError(msg)
-
-    def __str__(self):
-        return "All working"
 
 
 if __name__ == "__main__":

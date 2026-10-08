@@ -9,6 +9,7 @@ dependencies = [
     "fire>=0.7.1",
     "pandas",
     "pydantic>=2.13.5",
+    "pytest>=9.1.1",
     "tqdm>=4.70.1",
 ]
 
