@@ -13,47 +13,69 @@ class Cli:
 
     def index(
         self,
-        max_chunk_size: int
+        max_chunk_size: str = DEFAULT_CHUNK_SIZE
     ) -> None:
-        self
+        if self.numbers_validator(max_chunk_size):
+            self.arguments["index"] = max_chunk_size
 
     def search(
         self,
         query: str,
-        k: int
+        k: str
     ) -> None:
-        ...
+            if self.numbers_validator(k):
+                values = {}
+                values["query"] = query
+                values["k"] = k
+                self.arguments["search"] = values.copy()
+                del values
 
     def search_dataset(
         self,
         dataset_path: str,
-        k: int,
+        k: str,
         save_directory: str
     ) -> None:
-        ...
+        if self.numbers_validator():
+            values = {}
+            values["dataset_path"] = dataset_path
+            values["k"] = k
+            values["save_directory"] = save_directory
+            self.arguments["search_data"] = values.copy()
 
     def answer(
         self,
         query: str,
-        k: int
+        k: str
     ) -> None:
-        ...
+        if self.numbers_validator(k):
+            values = {}
+            values["query"] = query
+            values["k"] = k
+            self.arguments["answer"] = values.copy()
 
     def answer_dataset(
         self,
         student_search_results_path: str,
         save_directory: str
     ) -> None:
-        ...
+        values = {}
+        values[student_search_results_path] = student_search_results_path
+        values[save_directory] = save_directory
+        self.arguments["answer_dataset"] = values.copy()
 
     def evaluate(
         self,
         student_search_results_path: str,
         dataset_path: str
     ) -> None:
-        ...
+        values = {}
+        values[student_search_results_path] = student_search_results_path
+        values[dataset_path] = dataset_path
+        self.arguments["evaluate"] = values.copy()
 
     def numbers_validator(self, *args: str) -> bool:
+        print(all(arg for arg in args if arg.isdigit()))
         if all(arg for arg in args if arg.isdigit()):
             return True
 
@@ -65,3 +87,12 @@ class Cli:
         {invalids}, we expected integer values.
         """
         raise CliError(msg)
+
+    def __str__(self):
+        return "All working"
+
+
+if __name__ == "__main__":
+    cli = Cli()
+    fire.Fire(cli)
+    print(cli.arguments)
