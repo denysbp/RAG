@@ -1,6 +1,7 @@
 import fire
 from src.exceptions import CliError
 from typing import Any
+from inspect import cleandoc
 
 
 DEFAULT_CHUNK_SIZE = 2000
@@ -80,12 +81,12 @@ class Rag:
             return True
 
         invalids = [arg for arg in args if not arg.isdigit()]
-        msg = f"""
+        msg = cleandoc(f"""
         Error: Invalids types was passed on the cli.
 
         We can't tell wich one but they have these values:
         {invalids}, we expected integer values.
-        """
+        """)
         raise CliError(msg)
 
 

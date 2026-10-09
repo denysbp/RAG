@@ -15,7 +15,7 @@
 
     links:
         https://www.youtube.com/watch?v=8OJC21T2SL4
-        https://reference.langchain.com/python/langchain-text-splitters/langchain_text_splitters?utm_source=chatgpt.com
+        https://reference.langchain.com/python/langchain-text-splitters/langchain_text_splitters
             DOCUMENTOS vLLM
                 |
         Identificar extensão
