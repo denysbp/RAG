@@ -36,3 +36,9 @@ run:
 
 clean:
 	rm -rf src/__pycache__
+	rm -rf .pytest_cache
+	rm -rf tests/__pycache__
+
+lint:
+	uv run -m flake8 .
+	uv run -m mypy  --config-file pyproject.toml .

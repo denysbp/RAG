@@ -1,4 +1,4 @@
-from .cli import Cli
+from .rag import Rag
 from .exceptions import CliError
 
 

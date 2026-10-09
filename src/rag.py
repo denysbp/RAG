@@ -7,7 +7,7 @@ DEFAULT_CHUNK_SIZE = 2000
 DEFAULT_K = 10
 
 
-class Cli:
+class Rag:
     def __init__(self):
         self.arguments: dict[str: Any] = {}
 
@@ -15,7 +15,6 @@ class Cli:
         self,
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
     ) -> None:
-        print(type(max_chunk_size))
         if self.numbers_validator(max_chunk_size):
             self.arguments["index"] = int(max_chunk_size)
 
@@ -91,6 +90,6 @@ class Cli:
 
 
 if __name__ == "__main__":
-    cli = Cli()
+    cli = Rag()
     fire.Fire(cli)
     print(cli.arguments)
