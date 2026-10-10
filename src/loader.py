@@ -6,7 +6,7 @@ from pathlib import Path
 
 class JsonLoader:
     def __init__(self) -> None:
-        self.chunk_dir: str = "data/processed/"
+        self.chunk_dir: str = "data/processed/chunks"
 
     def save_chunks(
         self,
@@ -20,7 +20,7 @@ class JsonLoader:
         )
         obj = [m.model_dump() for m in chunks]
         with open(out_path, "w", encoding="utf-8") as file:
-            json.dump(obj, file, ensure_ascii=True, indent=2)
+            json.dump(obj, file, indent=2)
 
     def load_chunk(self, prefix: str) -> List[MinimalSource]:
         path = Path(self.chunk_dir) / Path(prefix)

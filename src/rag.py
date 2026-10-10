@@ -2,12 +2,14 @@ import fire
 from src.exceptions import CliError
 from .chunker import Chunkernizer
 from .loader import JsonLoader
-from typing import Any
+from typing import Any, List
 from inspect import cleandoc
+from .models import MinimalSource
+import bm25s
 
 
 DEFAULT_CHUNK_SIZE = "2000"
-DEFAULT_K = 10
+DEFAULT_K = "10"
 
 
 class Rag:
@@ -21,26 +23,22 @@ class Rag:
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
     ) -> None:
         if self.numbers_validator(max_chunk_size):
-            if max_chunk_size > 2000:
+            value = int(max_chunk_size)
+            if value <= 0 or value > 2000:
                 raise CliError(
                     cleandoc(
                         """
-                        Chunk sizes must be lower than 2000
-                        characters, try pass something above it.
+                        Chunk size should be '> 0 and  <= 2000'
                         """
                     )
                 )
-            self.chunker = Chunkernizer(int(max_chunk_size))
+            self.chunker = Chunkernizer(value)
             self.chunker.files_processor()
-            self.loader.save_chunks(
-                self.chunker.md_chunks, "md_chunks.json"
-            )
-            self.loader.save_chunks(
-                self.chunker.py_chunks, "py_chunks.json"
-            )
-            self.loader.save_chunks(
-                self.chunker.chunks, "chunks.json"
-            )
+            master = self._build_index(self.chunker)
+            self.loader.save_chunks(master, "master.json")
+            print(f"Ingestion complete! indexed {len(master)} ", end="")
+            print(f"chunks under {self.loader.chunk_dir}")
+
 
     def search(
         self,
@@ -56,7 +54,7 @@ class Rag:
         save_directory: str,
         k: str = DEFAULT_K,
     ) -> None:
-        if self.numbers_validator():
+        if self.numbers_validator(k):
             pass
 
     def answer(
@@ -82,18 +80,27 @@ class Rag:
         pass
 
     def numbers_validator(self, value: str) -> bool:
-
-        if isinstance(value, int):
+        if isinstance(int(value), int):
             return True
         msg = cleandoc(
-        f"""
-        Error: Invalid type was passed on the cli.
+            f"""
+            Error: Invalid type was passed on the cli.
 
-        Wrong value:
-        {value}, we expected integer values.
-        """
+            Wrong value:
+            {value}, we expected integer values.
+            """
         )
         raise CliError(msg)
+
+    def _build_index(self, chunker: Chunkernizer) -> List[MinimalSource]:
+        master = [*chunker.chunks, *chunker.py_chunks, *chunker.md_chunks]
+        corpus = []
+        corpus.extend([s.text for s in master])
+        tokens = bm25s.tokenize(corpus, leave=True)
+        retriver = bm25s.BM25()
+        retriver.index(tokens, leave_progress=True)
+        retriver.save("data/processed/bm25", leave_progress=True)
+        return master
 
 
 if __name__ == "__main__":

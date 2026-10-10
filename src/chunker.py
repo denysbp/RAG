@@ -5,7 +5,7 @@ from langchain_text_splitters import (
 from pathlib import Path
 from typing import Set, List
 from .models import MinimalSource
-from .exceptions import FileError, ChunkError
+from .exceptions import FileError
 from inspect import cleandoc
 from .loader import JsonLoader
 from tqdm import tqdm
@@ -62,7 +62,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "tokens": source
+                "text": source
             })
             self.chunks.append(model)
 
@@ -77,7 +77,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "tokens": source
+                "text": source
             })
             self.py_chunks.append(model)
 
@@ -92,7 +92,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "tokens": source
+                "text": source
             })
             self.md_chunks.append(model)
 
@@ -119,6 +119,7 @@ class Chunkernizer:
         except IOError as e:
             print(e)
             print("We will skip this file")
+            return ""
 
     def files_processor(self) -> None:
         for path in tqdm(sorted(self.paths), desc="chunking"):

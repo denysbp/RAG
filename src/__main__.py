@@ -1,5 +1,8 @@
 from .rag import Rag
-from .exceptions import *
+from .exceptions import (
+    ChunkError,
+    CliError
+)
 from fire import Fire
 
 
@@ -10,5 +13,5 @@ if __name__ == "__main__":
         print(e)
     except CliError as e:
         print(e)
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         print("Program stoped")
