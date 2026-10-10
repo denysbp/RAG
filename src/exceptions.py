@@ -1,12 +1,18 @@
 class CliError(Exception):
-    def __init__(self, *args) -> None:
+    def __init__(self, *args: str) -> None:
         super().__init__(*args)
 
 
 class ModelsError(Exception):
-    def __init__(self, *args) -> None:
+    def __init__(self, *args: str) -> None:
         super().__init__(*args)
 
+
 class FileError(Exception):
-    def __init__(self, *args) -> None:
+    def __init__(self, *args: str) -> None:
+        super().__init__(self, *args)
+
+
+class ChunkError(Exception):
+    def __init__(self, *args: str) -> None:
         super().__init__(self, *args)

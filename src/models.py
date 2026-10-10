@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 import uuid
 from typing import List
-from enum import Enum
 
 
 class MinimalSource(BaseModel):
@@ -12,7 +11,7 @@ class MinimalSource(BaseModel):
     file_path: str
     first_character_index: int
     last_character_index: int
-
+    tokens: str
 
 
 """
