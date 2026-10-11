@@ -7,16 +7,20 @@ import numpy as np
 
 class JsonLoader:
     def __init__(self) -> None:
-        self.chunk_dir: str = "data/processed/"
+        self.chunk_dir: str = "data"
 
     def save(
         self,
         obj: Any,
         prefix: str,
-        dir: str = "chunks",
+        dir: str = "processed",
+        method: str = "normal"
     ) -> None:
-        out_path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
-        Path(out_path).parent.mkdir(
+        if method == "normal":
+            out_path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
+        else:
+            out_path = Path(prefix)
+        out_path.parent.mkdir(
             parents=True,
             exist_ok=True
         )
@@ -28,7 +32,7 @@ class JsonLoader:
     def load(
         self,
         prefix: str,
-        dir: str = "chunks",
+        dir: str = "processed",
         obj: Any = MinimalSource
     ) -> np.ndarray[Any, Any]:
         path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
@@ -41,7 +45,7 @@ class JsonLoader:
     def load_obj(
         self,
         prefix: str,
-        dir: str = "chunks",
+        dir: str = "processed",
     ) -> StudentSearchResults:
         path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
         with open(path, "r") as file:

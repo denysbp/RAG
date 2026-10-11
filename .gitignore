@@ -12,3 +12,4 @@ wheels/
 .vscode
 
 data/processed
+data/output/

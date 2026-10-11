@@ -1,5 +1,6 @@
 import fire
 from src.exceptions import CliError, FileError
+import json
 from .chunker import Chunkernizer
 from .loader import JsonLoader
 from typing import Any, List
@@ -8,10 +9,12 @@ from .models import (
     MinimalSource,
     MinimalSearchResults,
     StudentSearchResults,
-    UnansweredQuestion
+    UnansweredQuestion,
+    RagDataset
 )
 import bm25s
 from pathlib import Path
+from tqdm import tqdm
 
 DEFAULT_CHUNK_SIZE = "2000"
 DEFAULT_K = "10"
@@ -59,17 +62,54 @@ class Rag:
             self.loader.save(
                 obj.model_dump(),
                 "search_results.json",
-                "search"
+                "output/search_results"
             )
 
     def search_dataset(
         self,
         dataset_path: str,
+        k: str,
         save_directory: str,
-        k: str = DEFAULT_K,
     ) -> None:
-        if self.numbers_validator(k):
-            pass
+        if not self.numbers_validator(k):
+            return
+        path = Path(dataset_path)
+        if not Path(dataset_path).exists():
+            msg = cleandoc(
+                f"""
+                The provider path: {path.absolute()}
+                don't exists, please pass a valid path
+                and try again
+                """
+            )
+            raise CliError(msg)
+        with open(path, "r", encoding="utf-8") as file:
+            questions = json.load(file)["rag_questions"]
+            obj = [
+                UnansweredQuestion.model_validate(
+                    m
+                ) for m in tqdm(questions, desc="loading")
+            ]
+        data_set = RagDataset(
+            rag_questions=obj
+        )
+        sources = []
+        for query in tqdm(data_set.rag_questions, desc="searching"):
+            sources.append(
+                self._search_query(query.question, int(k), show=False)
+            )
+        result = StudentSearchResults(
+            search_results=sources,
+            k=int(k)
+        )
+        file_name = "/" + str(Path(dataset_path).name)
+
+        self.loader.save(
+            result.model_dump(),
+            save_directory + file_name,
+            method="dataset"
+        )
+        print(f"Saved student_search_results to {save_directory}")
 
     def answer(
         self,
@@ -119,8 +159,13 @@ class Rag:
         self.retriver.save("data/processed/bm25", leave_progress=True)
         return master
 
-    def _search_query(self, query: str, k: int) -> MinimalSearchResults:
-        path = Path(self.loader.chunk_dir) / "chunks" / "master.json"
+    def _search_query(
+        self,
+        query: str,
+        k: int,
+        show: bool = True
+    ) -> MinimalSearchResults:
+        path = Path(self.loader.chunk_dir) / "processed" / "master.json"
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
         master = self.loader.load("master.json")
@@ -142,17 +187,16 @@ class Rag:
         for doc_id in mapped_ids[0]:
             obj: MinimalSource = master[int(doc_id)]
             sources.append(obj)
-            index = f"{obj.first_character_index}:{obj.last_character_index}"
-            print(obj.file_path, f"[{index}]")
+            if show:
+                index = f"{obj.first_character_index}:"
+                index += f"{obj.last_character_index}"
+                print(obj.file_path, f"[{index}]")
         question = UnansweredQuestion(question=query)
         return MinimalSearchResults(
             question_id=question.question_id,
             question=question.question,
             retrieved_sources=sources
         )
-
-    def duplicate_question(self) -> None:
-        pass
 
 
 if __name__ == "__main__":
