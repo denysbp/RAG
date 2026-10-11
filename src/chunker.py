@@ -7,7 +7,6 @@ from typing import Set, List
 from .models import MinimalSource
 from .exceptions import FileError
 from inspect import cleandoc
-from .loader import JsonLoader
 from tqdm import tqdm
 
 
@@ -132,16 +131,3 @@ class Chunkernizer:
                 self._chunk_file(text, path)
             elif ".md" in path:
                 self._chunk_markdown_file(text, path)
-
-
-if __name__ == "__main__":
-    try:
-        chunker = Chunkernizer(2000)
-        chunker.files_processor()
-        loader = JsonLoader()
-        loader.save_chunks(chunker.md_chunks, "md_chunks.json")
-        loader.save_chunks(chunker.py_chunks, "py_chunks.json")
-        loader.save_chunks(chunker.chunks, "chunks.json")
-        print(loader.load_chunk("md_chunks.json"))
-    except FileError as e:
-        print(e.args[1])
