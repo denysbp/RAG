@@ -1,6 +1,6 @@
 import json
 from typing import Any
-from .models import MinimalSource
+from .models import MinimalSource, StudentSearchResults
 from pathlib import Path
 import numpy as np
 
@@ -20,14 +20,29 @@ class JsonLoader:
             parents=True,
             exist_ok=True
         )
-        obj = [m.model_dump() for m in obj]
-        with open(out_path, "w", encoding="utf-8") as file:
+        if isinstance(obj, list):
+            obj = [m.model_dump() for m in obj]
+        with open(out_path, "w+", encoding="utf-8") as file:
             json.dump(obj, file, indent=2)
 
-    def load(self, prefix: str, dir: str = "chunks") -> np.ndarray[Any, Any]:
+    def load(
+        self,
+        prefix: str,
+        dir: str = "chunks",
+        obj: Any = MinimalSource
+    ) -> np.ndarray[Any, Any]:
         path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
         with open(path, "r") as file:
             return np.array(
-                [MinimalSource.model_validate(m) for m in json.load(file)],
+                [obj.model_validate(m) for m in json.load(file)],
                 dtype=object
             )
+
+    def load_obj(
+        self,
+        prefix: str,
+        dir: str = "chunks",
+    ) -> StudentSearchResults:
+        path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
+        with open(path, "r") as file:
+            return StudentSearchResults.model_validate(json.load(file))

@@ -1,12 +1,17 @@
 import fire
-from src.exceptions import CliError
+from src.exceptions import CliError, FileError
 from .chunker import Chunkernizer
 from .loader import JsonLoader
 from typing import Any, List
 from inspect import cleandoc
-from .models import MinimalSource, MinimalSearchResults
+from .models import (
+    MinimalSource,
+    MinimalSearchResults,
+    StudentSearchResults,
+    UnansweredQuestion
+)
 import bm25s
-from uuid import uuid4
+from pathlib import Path
 
 DEFAULT_CHUNK_SIZE = "2000"
 DEFAULT_K = "10"
@@ -46,11 +51,32 @@ class Rag:
         k: str = DEFAULT_K
     ) -> None:
         if self.numbers_validator(k):
-            self.loader.save(
-                [self._search_query(query, int(k))],
-                "minimal_search_results.json",
-                dir="search"
-            )
+            result = self._search_query(query, int(k))
+            path = Path(
+                self.loader.chunk_dir
+            ) / "search" / "search_results.json"
+            if not path.exists() or not path.read_text():
+                obj = StudentSearchResults(
+                    search_results=[result],
+                    k=int(k)
+                )
+                self.loader.save(
+                    obj.model_dump(),
+                    "search_results.json",
+                    "search"
+                )
+            else:
+                obj = self.loader.load_obj(
+                    "search_results.json",
+                    "search",
+                )
+                obj.search_results.append(result)
+                obj.k += int(k)
+                self.loader.save(
+                    obj.model_dump(),
+                    "search_results.json",
+                    "search"
+                )
 
     def search_dataset(
         self,
@@ -110,6 +136,9 @@ class Rag:
         return master
 
     def _search_query(self, query: str, k: int) -> MinimalSearchResults:
+        path = Path(self.loader.chunk_dir) / "chunks" / "master.json"
+        if not path.exists():
+            raise FileError(f"You should index first, we didn't find {path}")
         master = self.loader.load("master.json")
         if k <= 0 or k > master.size:
             raise CliError(
@@ -131,11 +160,15 @@ class Rag:
             sources.append(obj)
             index = f"{obj.first_character_index}:{obj.last_character_index}"
             print(obj.file_path, f"[{index}]")
+        question = UnansweredQuestion(question=query)
         return MinimalSearchResults(
-            question_id=str(uuid4()),
-            question=query,
+            question_id=question.question_id,
+            question=question.question,
             retrieved_sources=sources
         )
+
+    def duplicate_question(self) -> None:
+        pass
 
 
 if __name__ == "__main__":
