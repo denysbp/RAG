@@ -52,31 +52,15 @@ class Rag:
     ) -> None:
         if self.numbers_validator(k):
             result = self._search_query(query, int(k))
-            path = Path(
-                self.loader.chunk_dir
-            ) / "search" / "search_results.json"
-            if not path.exists() or not path.read_text():
-                obj = StudentSearchResults(
-                    search_results=[result],
-                    k=int(k)
-                )
-                self.loader.save(
-                    obj.model_dump(),
-                    "search_results.json",
-                    "search"
-                )
-            else:
-                obj = self.loader.load_obj(
-                    "search_results.json",
-                    "search",
-                )
-                obj.search_results.append(result)
-                obj.k += int(k)
-                self.loader.save(
-                    obj.model_dump(),
-                    "search_results.json",
-                    "search"
-                )
+            obj = StudentSearchResults(
+                search_results=[result],
+                k=int(k)
+            )
+            self.loader.save(
+                obj.model_dump(),
+                "search_results.json",
+                "search"
+            )
 
     def search_dataset(
         self,
