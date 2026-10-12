@@ -19,6 +19,7 @@ from pathlib import Path
 from tqdm import tqdm
 from rich.console import Console
 from rich.spinner import Spinner
+from rich.text import Text
 from rich.live import Live
 from nocamel.converters import to_sentence
 
@@ -35,6 +36,7 @@ class Rag:
         self.loader = JsonLoader()
         self.retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
         self.aswer_mode: bool = False
+        self.model: QwenLlm = QwenLlm()
 
     def index(
         self,
@@ -125,19 +127,15 @@ class Rag:
     ) -> MinimalAnswer:
         if not query:
             raise CliError("Provide a usefull message")
-        self.model: QwenLlm = QwenLlm()
         self.aswer_mode = True
         search = self._search_query(query, int(k))
-        search_result = self.loader.load_obj(
-            "search_results.json",
-            "output/search_results"
-        )
         prompt = self._build_prompt(
             query,
-            search_result
+            search
         )
         console = Console()
-        with Live(Spinner("dots", text="Generating..."), console=console):
+        text = Text("Generating...", style="bold red")
+        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
             asnwer = self.model.generate(
                 prompt,
                 enable_thinking=False
@@ -153,13 +151,15 @@ class Rag:
     def _build_prompt(
         self,
         question: str,
-        search_results: StudentSearchResults,
+        search_results: MinimalSearchResults,
     ) -> List[Dict]:
         context = ""
-        for search in tqdm(search_results.search_results, desc="Prompting"):
-            sources = search.retrieved_sources
-            for retrive in sources:
-                context += retrive.text + "\n\n"
+        for search in tqdm(
+            search_results.retrieved_sources,
+            desc="Prompting",
+            leave=False
+        ):
+            context += search.text + "\n\n"
         system_content = """
         You are a question-answering assistant.
 
