@@ -12,7 +12,7 @@ class JsonLoader:
     def save(
         self,
         obj: Any,
-        prefix: str,
+        prefix: str | Path,
         dir: str = "processed",
         method: str = "normal"
     ) -> None:
@@ -45,8 +45,7 @@ class JsonLoader:
     def load_obj(
         self,
         prefix: str,
-        dir: str = "processed",
     ) -> StudentSearchResults:
-        path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
+        path = Path(prefix)
         with open(path, "r") as file:
             return StudentSearchResults.model_validate(json.load(file))

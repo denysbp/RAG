@@ -9,10 +9,11 @@ from .models import (
     StudentSearchResults,
     UnansweredQuestion,
     RagDataset,
-    MinimalAnswer
+    MinimalAnswer,
+    StudentSearchResultsAndAnswer
 )
 import fire
-from typing import Any, List, Dict
+from typing import List, Dict
 from inspect import cleandoc
 import bm25s
 from pathlib import Path
@@ -31,18 +32,17 @@ MAX_CHARACTER = 5000
 
 class Rag:
     def __init__(self) -> None:
-        self.arguments: dict[str, Any] = {}
-        self.chunker: Chunkernizer
-        self.loader = JsonLoader()
-        self.retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
-        self.aswer_mode: bool = False
-        self.model: QwenLlm = QwenLlm()
+        self._chunker: Chunkernizer
+        self._loader = JsonLoader()
+        self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
+        self._aswer_mode: bool = False
+        self._model: QwenLlm = QwenLlm()
 
     def index(
         self,
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
     ) -> None:
-        if self.numbers_validator(max_chunk_size):
+        if self._numbers_validator(max_chunk_size):
             value = int(max_chunk_size)
             if value <= 0 or value > 2000:
                 raise CliError(
@@ -52,12 +52,12 @@ class Rag:
                         """
                     )
                 )
-            self.chunker = Chunkernizer(value)
-            self.chunker.files_processor()
-            master = self._build_index(self.chunker)
-            self.loader.save(master, "master.json")
+            self._chunker = Chunkernizer(value)
+            self._chunker.files_processor()
+            master = self._build_index(self._chunker)
+            self._loader.save(master, "master.json")
             print(f"Ingestion complete! indexed {len(master)} ", end="")
-            print(f"chunks under {self.loader.chunk_dir}")
+            print(f"chunks under {self._loader.chunk_dir}")
 
     def search(
         self,
@@ -65,8 +65,8 @@ class Rag:
         k: str = DEFAULT_K
     ) -> StudentSearchResults:
         query = to_sentence(query)
-        self.numbers_validator(k)
-        v = not self.aswer_mode
+        self._numbers_validator(k)
+        v = not self._aswer_mode
         result = self._search_query(query, int(k), show=v)
         obj = StudentSearchResults(
             search_results=[result],
@@ -80,7 +80,7 @@ class Rag:
         k: str,
         save_directory: str,
     ) -> None:
-        if not self.numbers_validator(k):
+        if not self._numbers_validator(k):
             return
         path = Path(dataset_path)
         if not Path(dataset_path).exists():
@@ -113,7 +113,7 @@ class Rag:
         )
         file_name = "/" + str(Path(dataset_path).name)
 
-        self.loader.save(
+        self._loader.save(
             result.model_dump(),
             save_directory + file_name,
             method="dataset"
@@ -129,17 +129,25 @@ class Rag:
             raise CliError("Provide a usefull message")
         self.aswer_mode = True
         search = self._search_query(query, int(k))
+        console = Console()
+        text = Text("Generating...", style="bold red")
+        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
+            obj = self._answer_question(search, query)
+        return obj
+
+    def _answer_question(
+        self,
+        search: MinimalSearchResults,
+        query: str
+    ) -> MinimalAnswer:
         prompt = self._build_prompt(
             query,
             search
         )
-        console = Console()
-        text = Text("Generating...", style="bold red")
-        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
-            asnwer = self.model.generate(
-                prompt,
-                enable_thinking=False
-            )
+        asnwer = self._model.generate(
+            prompt,
+            enable_thinking=False
+        )
 
         return MinimalAnswer(
             question_id=search.question_id,
@@ -148,17 +156,60 @@ class Rag:
             answer=asnwer
         )
 
+    def answer_dataset(
+        self,
+        student_search_results_path: str,
+        save_directory: str = ""
+    ) -> None:
+        path = Path(student_search_results_path)
+        if not Path(student_search_results_path).exists():
+            msg = cleandoc(
+                f"""
+                The provider path: {path.absolute()}
+                don't exists, please pass a valid path
+                and try again
+                """
+            )
+            raise CliError(msg)
+        if not save_directory or isinstance(save_directory, bool):
+            msg = cleandoc(
+                f"""
+                The provider path: {save_directory}
+                is empty, please provide a valid path
+                and try again
+                """
+            )
+            raise CliError(msg)
+        console = Console()
+        text = Text("Generating...", style="bold red")
+        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
+            search_result = self._loader.load_obj(
+                student_search_results_path
+            )
+            anwers = [
+                self._answer_question(
+                    m, m.question
+                ) for m in search_result.search_results
+            ]
+            result = StudentSearchResultsAndAnswer(
+                search_results=anwers,
+                k=search_result.k
+            )
+            file_name = Path(student_search_results_path).name
+
+            self._loader.save(
+                result.model_dump(),
+                Path(save_directory) / file_name,
+                method="dataset"
+            )
+
     def _build_prompt(
         self,
         question: str,
         search_results: MinimalSearchResults,
     ) -> List[Dict]:
         context = ""
-        for search in tqdm(
-            search_results.retrieved_sources,
-            desc="Prompting",
-            leave=False
-        ):
+        for search in search_results.retrieved_sources:
             context += search.text + "\n\n"
         system_content = """
         You are a question-answering assistant.
@@ -180,13 +231,6 @@ class Rag:
             {"role": "user", "content": user_content},
         ]
 
-    def answer_dataset(
-        self,
-        student_search_results_path: str,
-        save_directory: str
-    ) -> None:
-        pass
-
     def evaluate(
         self,
         student_search_results_path: str,
@@ -194,7 +238,7 @@ class Rag:
     ) -> None:
         pass
 
-    def numbers_validator(self, value: str) -> bool:
+    def _numbers_validator(self, value: str) -> bool:
         if not isinstance(value, int) or isinstance(
             value,
             bool
@@ -216,8 +260,8 @@ class Rag:
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
-        self.retriver.index(tokens, leave_progress=True)
-        self.retriver.save("data/processed/bm25", leave_progress=True)
+        self._retriver.index(tokens, leave_progress=True)
+        self._retriver.save("data/processed/bm25", leave_progress=True)
         return master
 
     def _search_query(
@@ -226,15 +270,15 @@ class Rag:
         k: int,
         show: bool = False
     ) -> MinimalSearchResults:
-        path = Path(self.loader.chunk_dir) / "processed" / "master.json"
+        path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
-        master = self.loader.load("master.json")
+        master = self._loader.load("index.json")
         if k <= 0 or k > master.size:
             raise CliError(
                 f"k: should be '> 0 and <= {master.size}' <index size>"
             )
-        mapped = self.retriver.load(
+        mapped = self._retriver.load(
             "data/processed/bm25",
             mmap=True,
             show_progress=True,
@@ -263,4 +307,3 @@ class Rag:
 if __name__ == "__main__":
     cli = Rag()
     fire.Fire(cli)
-    print(cli.arguments)
