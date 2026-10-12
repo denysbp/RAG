@@ -1159,6 +1159,19 @@ wheels = [
 ]
 
 [[package]]
+name = "nocamel"
+version = "2025.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "pyperclip" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/9b/72d4045061d438592725e6521c60a78830abe14d427042e73de8a614a7a2/nocamel-2025.1.0.tar.gz", hash = "sha256:0c82cc208f5e5380308ffd70a164198d7386baf81d1a5498ad1ecb23a1c1a568", size = 17431, upload-time = "2025-02-28T22:42:34.376Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/bd/a3d32ad5f00285b1460cda8dfd8a13aaae68c60b1b108f2a4678919e3dfe/nocamel-2025.1.0-py3-none-any.whl", hash = "sha256:865d15f376af73b236b3db8188e830f47812cca26011dd586b2e4be989d5e080", size = 3240, upload-time = "2025-02-28T22:42:32.62Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.2.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1972,6 +1985,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyperclip"
+version = "1.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6", size = 12185, upload-time = "2025-09-26T14:40:37.245Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273", size = 11063, upload-time = "2025-09-26T14:40:36.069Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2085,6 +2107,7 @@ dependencies = [
     { name = "flake8" },
     { name = "langchain-text-splitters" },
     { name = "mypy" },
+    { name = "nocamel" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -2105,6 +2128,7 @@ requires-dist = [
     { name = "flake8", specifier = ">=7.4.1" },
     { name = "langchain-text-splitters", specifier = ">=1.1.3" },
     { name = "mypy", specifier = ">=2.4.0" },
+    { name = "nocamel", specifier = ">=2025.1.0" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "pandas" },
     { name = "pydantic", specifier = ">=2.13.5" },

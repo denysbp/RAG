@@ -8,7 +8,7 @@ from .models import MinimalSource
 from .exceptions import FileError
 from inspect import cleandoc
 from tqdm import tqdm
-
+from nocamel.converters import to_sentence
 
 VALID_EXTENSIONS = {
     ".py",
@@ -54,7 +54,7 @@ class Chunkernizer:
         documents = self.spliter.create_documents([text])
 
         for document in documents:
-            source = document.page_content
+            source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
             end = start + len(source)
             model = MinimalSource.model_validate({
@@ -69,7 +69,7 @@ class Chunkernizer:
         documents = self.py_spliter.create_documents([text])
 
         for document in documents:
-            source = document.page_content
+            source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
             end = start + len(source)
             model = MinimalSource.model_validate({
@@ -84,7 +84,7 @@ class Chunkernizer:
         documents = self.md_spliter.create_documents([text])
 
         for document in documents:
-            source = document.page_content
+            source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
             end = start + len(source)
             model = MinimalSource.model_validate({

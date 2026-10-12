@@ -8,7 +8,8 @@ from .models import (
     MinimalSearchResults,
     StudentSearchResults,
     UnansweredQuestion,
-    RagDataset
+    RagDataset,
+    MinimalAnswer
 )
 import fire
 from typing import Any, List, Dict
@@ -19,6 +20,7 @@ from tqdm import tqdm
 from rich.console import Console
 from rich.spinner import Spinner
 from rich.live import Live
+from nocamel.converters import to_sentence
 
 
 DEFAULT_CHUNK_SIZE = "2000"
@@ -31,8 +33,7 @@ class Rag:
         self.arguments: dict[str, Any] = {}
         self.chunker: Chunkernizer
         self.loader = JsonLoader()
-        self.retriver = bm25s.BM25()
-        self.model: QwenLlm = QwenLlm()
+        self.retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
         self.aswer_mode: bool = False
 
     def index(
@@ -60,19 +61,16 @@ class Rag:
         self,
         query: str,
         k: str = DEFAULT_K
-    ) -> None:
-        if self.numbers_validator(k):
-            v = not self.aswer_mode
-            result = self._search_query(query, int(k), show=v)
-            obj = StudentSearchResults(
-                search_results=[result],
-                k=int(k)
-            )
-            self.loader.save(
-                obj.model_dump(),
-                "search_results.json",
-                "output/search_results"
-            )
+    ) -> StudentSearchResults:
+        query = to_sentence(query)
+        self.numbers_validator(k)
+        v = not self.aswer_mode
+        result = self._search_query(query, int(k), show=v)
+        obj = StudentSearchResults(
+            search_results=[result],
+            k=int(k)
+        )
+        return obj
 
     def search_dataset(
         self,
@@ -124,9 +122,12 @@ class Rag:
         self,
         query: str,
         k: str = DEFAULT_K
-    ) -> None:
+    ) -> MinimalAnswer:
+        if not query:
+            raise CliError("Provide a usefull message")
+        self.model: QwenLlm = QwenLlm()
         self.aswer_mode = True
-        self.search(query, k)
+        search = self._search_query(query, int(k))
         search_result = self.loader.load_obj(
             "search_results.json",
             "output/search_results"
@@ -137,18 +138,23 @@ class Rag:
         )
         console = Console()
         with Live(Spinner("dots", text="Generating..."), console=console):
-            txt = self.model.generate(
+            asnwer = self.model.generate(
                 prompt,
                 enable_thinking=False
             )
-        print(txt)
 
+        return MinimalAnswer(
+            question_id=search.question_id,
+            question=search.question,
+            retrieved_sources=search.retrieved_sources,
+            answer=asnwer
+        )
 
     def _build_prompt(
         self,
         question: str,
         search_results: StudentSearchResults,
-    ) -> Dict:
+    ) -> List[Dict]:
         context = ""
         for search in tqdm(search_results.search_results, desc="Prompting"):
             sources = search.retrieved_sources
@@ -165,15 +171,14 @@ class Rag:
         clearly state that.
         """
         user_content = (
-        f"Context:\n{context}\n\n"
-        f"Question: {question}\n\n"
-        "Answer:"
+            f"Context:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Answer:"
         )
         return [
             {"role": "system", "content": cleandoc(system_content)},
             {"role": "user", "content": user_content},
         ]
-
 
     def answer_dataset(
         self,

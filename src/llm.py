@@ -1,5 +1,13 @@
 from typing import cast
-import torch
+from torch import (
+    long,
+    cuda,
+    float16,
+    float32,
+    tensor,
+    Tensor,
+    inference_mode
+)
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -7,12 +15,12 @@ class QwenLlm:
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self._tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-        if torch.cuda.is_available():
+        if cuda.is_available():
             self._device = "cuda"
-            dtype = torch.float16
+            dtype = float16
         else:
             self._device = "cpu"
-            dtype = torch.float32
+            dtype = float32
 
         self._model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -22,23 +30,23 @@ class QwenLlm:
 
         self._model.eval()
 
-    def encode(self, prompt: str) -> torch.Tensor:
+    def encode(self, prompt: str) -> Tensor:
         ids = self._tokenizer.encode(
             prompt,
             add_special_tokens=False,
         )
 
-        return torch.tensor(
+        return tensor(
             [ids],
             device=self._device,
-            dtype=torch.long,
+            dtype=long,
         )
 
     def encode_chat(
         self,
         messages: list[dict[str, str]],
         enable_thinking: bool = True,
-    ) -> torch.Tensor:
+    ) -> Tensor:
         text = self._tokenizer.apply_chat_template(
             messages,
             tokenize=False,
@@ -52,11 +60,11 @@ class QwenLlm:
             add_special_tokens=False,
         )
 
-        input_ids = cast(torch.Tensor, inputs["input_ids"])
+        input_ids = cast(Tensor, inputs["input_ids"])
         return input_ids.to(self._device)
 
-    def decode(self, ids: torch.Tensor | list[int]) -> str:
-        if isinstance(ids, torch.Tensor):
+    def decode(self, ids: Tensor | list[int]) -> str:
+        if isinstance(ids, Tensor):
             ids = ids.tolist()
 
         return cast(
@@ -78,7 +86,7 @@ class QwenLlm:
             enable_thinking=enable_thinking,
         )
 
-        with torch.inference_mode():
+        with inference_mode():
             outputs = self._model.generate(  # type: ignore[misc]
                 input_ids=input_ids,
                 max_new_tokens=max_new_tokens,
