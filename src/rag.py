@@ -1,10 +1,8 @@
-import fire
-from src.exceptions import CliError, FileError
 import json
 from .chunker import Chunkernizer
 from .loader import JsonLoader
-from typing import Any, List
-from inspect import cleandoc
+from src.exceptions import CliError, FileError
+from .llm import QwenLlm
 from .models import (
     MinimalSource,
     MinimalSearchResults,
@@ -12,6 +10,9 @@ from .models import (
     UnansweredQuestion,
     RagDataset
 )
+import fire
+from typing import Any, List
+from inspect import cleandoc
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
@@ -26,6 +27,7 @@ class Rag:
         self.chunker: Chunkernizer
         self.loader = JsonLoader()
         self.retriver = bm25s.BM25()
+        self.model: QwenLlm = QwenLlm()
 
     def index(
         self,

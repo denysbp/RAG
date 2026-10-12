@@ -1,0 +1,88 @@
+from typing import List, Union
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+class QwenLlm:
+    def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
+        self._tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        if torch.cuda.is_available():
+            self._device = "cuda"
+            dtype = torch.float16
+        else:
+            self._device = "cpu"
+            dtype = torch.float32
+
+        self._model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=dtype,
+        ).to(self._device)
+
+        self._model.eval()
+
+    def encode(self, prompt: str) -> torch.Tensor:
+        ids = self._tokenizer.encode(
+            prompt,
+            add_special_tokens=False
+        )
+
+        return torch.tensor(
+            [ids],
+            device=self._device,
+            dtype=torch.long
+        )
+
+    def encode_chat(
+        self,
+        messages: List[dict],
+        enable_thinking: bool = True
+    ) -> torch.Tensor:
+        text = self._tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=enable_thinking
+        )
+
+        inputs = self._tokenizer(
+            text,
+            return_tensors="pt",
+            add_special_tokens=False
+        )
+
+        return inputs["input_ids"].to(self._device)
+
+    def decode(
+        self,
+        ids: Union[torch.Tensor, List[int]]
+    ) -> str:
+        if isinstance(ids, torch.Tensor):
+            ids = ids.tolist()
+
+        return self._tokenizer.decode(
+            ids,
+            skip_special_tokens=True
+        )
+
+    @torch.inference_mode()
+    def generate(
+        self,
+        messages: List[dict],
+        max_new_tokens: int = 200,
+        enable_thinking: bool = True
+    ) -> str:
+        input_ids = self.encode_chat(
+            messages,
+            enable_thinking=enable_thinking
+        )
+
+        outputs = self._model.generate(
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            do_sample=False
+        )
+
+        new_tokens = outputs[0, input_ids.shape[1]:]
+
+        return self.decode(new_tokens)
