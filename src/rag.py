@@ -11,14 +11,19 @@ from .models import (
     RagDataset
 )
 import fire
-from typing import Any, List
+from typing import Any, List, Dict
 from inspect import cleandoc
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
+from rich.console import Console
+from rich.spinner import Spinner
+from rich.live import Live
+
 
 DEFAULT_CHUNK_SIZE = "2000"
 DEFAULT_K = "10"
+MAX_CHARACTER = 5000
 
 
 class Rag:
@@ -28,6 +33,7 @@ class Rag:
         self.loader = JsonLoader()
         self.retriver = bm25s.BM25()
         self.model: QwenLlm = QwenLlm()
+        self.aswer_mode: bool = False
 
     def index(
         self,
@@ -56,7 +62,8 @@ class Rag:
         k: str = DEFAULT_K
     ) -> None:
         if self.numbers_validator(k):
-            result = self._search_query(query, int(k))
+            v = not self.aswer_mode
+            result = self._search_query(query, int(k), show=v)
             obj = StudentSearchResults(
                 search_results=[result],
                 k=int(k)
@@ -118,8 +125,55 @@ class Rag:
         query: str,
         k: str = DEFAULT_K
     ) -> None:
-        if self.numbers_validator(k):
-            pass
+        self.aswer_mode = True
+        self.search(query, k)
+        search_result = self.loader.load_obj(
+            "search_results.json",
+            "output/search_results"
+        )
+        prompt = self._build_prompt(
+            query,
+            search_result
+        )
+        console = Console()
+        with Live(Spinner("dots", text="Generating..."), console=console):
+            txt = self.model.generate(
+                prompt,
+                enable_thinking=False
+            )
+        print(txt)
+
+
+    def _build_prompt(
+        self,
+        question: str,
+        search_results: StudentSearchResults,
+    ) -> Dict:
+        context = ""
+        for search in tqdm(search_results.search_results, desc="Prompting"):
+            sources = search.retrieved_sources
+            for retrive in sources:
+                context += retrive.text + "\n\n"
+        system_content = """
+        You are a question-answering assistant.
+
+        Answer the user's question using the provided context.
+        Focus on information relevant to the question.
+        Ignore unrelated code, tests, and examples.
+        Do not answer unrelated questions.
+        If the context does not contain enough information,
+        clearly state that.
+        """
+        user_content = (
+        f"Context:\n{context}\n\n"
+        f"Question: {question}\n\n"
+        "Answer:"
+        )
+        return [
+            {"role": "system", "content": cleandoc(system_content)},
+            {"role": "user", "content": user_content},
+        ]
+
 
     def answer_dataset(
         self,
@@ -154,7 +208,7 @@ class Rag:
         return False
 
     def _build_index(self, chunker: Chunkernizer) -> List[MinimalSource]:
-        master = [*chunker.chunks, *chunker.py_chunks, *chunker.md_chunks]
+        master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
         self.retriver.index(tokens, leave_progress=True)
@@ -165,7 +219,7 @@ class Rag:
         self,
         query: str,
         k: int,
-        show: bool = True
+        show: bool = False
     ) -> MinimalSearchResults:
         path = Path(self.loader.chunk_dir) / "processed" / "master.json"
         if not path.exists():

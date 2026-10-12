@@ -61,7 +61,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "text": source
+                "text": source.lower()
             })
             self.chunks.append(model)
 
@@ -76,7 +76,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "text": source
+                "text": source.lower()
             })
             self.py_chunks.append(model)
 
@@ -91,7 +91,7 @@ class Chunkernizer:
                 "file_path": path,
                 "first_character_index": start,
                 "last_character_index": end,
-                "text": source
+                "text": source.lower()
             })
             self.md_chunks.append(model)
 
@@ -125,9 +125,9 @@ class Chunkernizer:
             text = self._load_file(path)
             if not text:
                 continue
-            if ".py" in path:
-                self._chunk_python_file(text, path)
+            if ".md" in path:
+                self._chunk_markdown_file(text, path)
             elif ".txt" in path:
                 self._chunk_file(text, path)
-            elif ".md" in path:
-                self._chunk_markdown_file(text, path)
+            elif ".py" in path:
+                self._chunk_python_file(text, path)

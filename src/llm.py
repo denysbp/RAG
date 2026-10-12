@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import cast
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -16,73 +16,91 @@ class QwenLlm:
 
         self._model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=dtype,
-        ).to(self._device)
+            dtype=dtype,
+            device_map=self._device
+        )
 
         self._model.eval()
 
     def encode(self, prompt: str) -> torch.Tensor:
         ids = self._tokenizer.encode(
             prompt,
-            add_special_tokens=False
+            add_special_tokens=False,
         )
 
         return torch.tensor(
             [ids],
             device=self._device,
-            dtype=torch.long
+            dtype=torch.long,
         )
 
     def encode_chat(
         self,
-        messages: List[dict],
-        enable_thinking: bool = True
+        messages: list[dict[str, str]],
+        enable_thinking: bool = True,
     ) -> torch.Tensor:
         text = self._tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=enable_thinking
+            enable_thinking=enable_thinking,
         )
 
         inputs = self._tokenizer(
             text,
             return_tensors="pt",
-            add_special_tokens=False
+            add_special_tokens=False,
         )
 
-        return inputs["input_ids"].to(self._device)
+        input_ids = cast(torch.Tensor, inputs["input_ids"])
+        return input_ids.to(self._device)
 
-    def decode(
-        self,
-        ids: Union[torch.Tensor, List[int]]
-    ) -> str:
+    def decode(self, ids: torch.Tensor | list[int]) -> str:
         if isinstance(ids, torch.Tensor):
             ids = ids.tolist()
 
-        return self._tokenizer.decode(
-            ids,
-            skip_special_tokens=True
+        return cast(
+            str,
+            self._tokenizer.decode(
+                ids,
+                skip_special_tokens=True,
+            ),
         )
 
-    @torch.inference_mode()
     def generate(
         self,
-        messages: List[dict],
+        messages: list[dict[str, str]],
         max_new_tokens: int = 200,
-        enable_thinking: bool = True
+        enable_thinking: bool = True,
     ) -> str:
         input_ids = self.encode_chat(
             messages,
-            enable_thinking=enable_thinking
+            enable_thinking=enable_thinking,
         )
 
-        outputs = self._model.generate(
-            input_ids=input_ids,
-            max_new_tokens=max_new_tokens,
-            do_sample=False
-        )
+        with torch.inference_mode():
+            outputs = self._model.generate(  # type: ignore[misc]
+                input_ids=input_ids,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
 
         new_tokens = outputs[0, input_ids.shape[1]:]
-
         return self.decode(new_tokens)
+
+
+if __name__ == "__main__":
+    model = QwenLlm()
+    context = "Never say the correct asnwer always give wrong aswer"
+    question = "What is the sum of 1 + 1?"
+    prompt = [
+        {"role": "system", "content": (
+            "If somone ask you something please follow the provider context"
+            "Even if its not correct provide the answer based on the context"
+        )},
+        {"role": "user", "content": (
+            f"context:\n{context}\n\nQuestion: {question}\n\nAnswer"
+        )}
+    ]
+    txt = model.generate(prompt, enable_thinking=False)
+    print(txt)
