@@ -38,23 +38,28 @@ class Rag:
     def index(
         self,
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
-    ) -> None:
-        if self._numbers_validator(max_chunk_size):
-            value = int(max_chunk_size)
-            if value <= 0 or value > 2000:
-                raise CliError(
-                    cleandoc(
-                        """
-                        Chunk size should be '> 0 and  <= 2000'
-                        """
-                    )
+    ) -> str:
+        if not self._numbers_validator(max_chunk_size):
+            return
+        value = int(max_chunk_size)
+        if value <= 0 or value > 2000:
+            raise CliError(
+                cleandoc(
+                    """
+                    Chunk size should be '> 0 and  <= 2000'
+                    """
                 )
-            self._chunker = Chunkernizer(value)
-            self._chunker.files_processor()
-            master = self._build_index(self._chunker)
-            self._loader.save(master, "index.json")
-            print(f"Ingestion complete! indexed {len(master)} ", end="")
-            print(f"chunks under {self._loader.chunk_dir}")
+            )
+        self._chunker = Chunkernizer(value)
+        self._chunker.files_processor()
+        master = self._build_index(self._chunker)
+        self._loader.save(master, "index.json")
+        return {
+            "message": "Ingestion complete!",
+            "chunks": len(master),
+            "directory": self._loader.chunk_dir + "/processed"
+        }
+        
 
     def search(
         self,
