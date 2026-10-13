@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<module external.system.id="pyproject.toml" type="PYTHON_MODULE" version="4">
-  <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$/data/raw/vllm-0.10.1/examples/online_serving/structured_outputs" />
-    <orderEntry type="sourceFolder" forTests="false" />
-  </component>
-</module>
