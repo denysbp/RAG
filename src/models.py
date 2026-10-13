@@ -23,6 +23,7 @@ class MinimalSourceDataset(BaseModel):
     first_character_index: int
     last_character_index: int
 
+
 """
 The UnansweredQuestion and
 AnsweredQuestion models represent an unanswered
@@ -53,6 +54,7 @@ class RagDataset(BaseModel):
 class CodeBaseResults(AnsweredQuestion):
     difficulty: str
     is_valid: bool
+
 
 """
 The MinimalSearchResults and MinimalAnswer

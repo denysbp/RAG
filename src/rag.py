@@ -35,7 +35,6 @@ class Rag:
         self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
         self._aswer_mode: bool = False
 
-
     def index(
         self,
         max_chunk_size: str = DEFAULT_CHUNK_SIZE
@@ -96,14 +95,25 @@ class Rag:
         data_set = RagDataset(
             rag_questions=obj
         )
-        sources = []
-        for query in tqdm(data_set.rag_questions, desc="searching"):
-            sources.append(
-                self._search_query(query.question, int(k), show=False)
+        search_results: List[MinimalSearchResults] = []
+
+        for question in tqdm(
+            data_set.rag_questions,
+            desc="searching",
+        ):
+            search_result = self._search_query(
+                question.question,
+                int(k),
+                show=False,
             )
+
+            search_result.question_id = question.question_id
+
+            search_results.append(search_result)
+
         result = StudentSearchResults(
-            search_results=sources,
-            k=int(k)
+            search_results=search_results,
+            k=int(k),
         )
         file_name = "/" + str(Path(dataset_path).name)
 
@@ -122,22 +132,22 @@ class Rag:
         if not query:
             raise CliError("Provide a usefull message")
         self.aswer_mode = True
-        self._model: QwenLlm = QwenLlm()
         search = self._search_query(query, int(k))
         with tqdm(desc="Generating"):
-            obj = self._answer_question(search, query)
+            obj = self._answer_question(search, query, QwenLlm())
         return obj
 
     def _answer_question(
         self,
         search: MinimalSearchResults,
-        query: str
+        query: str,
+        model: QwenLlm
     ) -> MinimalAnswer:
         prompt = self._build_prompt(
             query,
             search
         )
-        asnwer = self._model.generate(
+        asnwer = model.generate(
             prompt,
             enable_thinking=False
         )
@@ -173,7 +183,6 @@ class Rag:
                 """
             )
             raise CliError(msg)
-        self._model: QwenLlm = QwenLlm()
         search_result = self._loader.load_obj(
             student_search_results_path
         )
@@ -182,7 +191,8 @@ class Rag:
             anwers.append(
                 self._answer_question(
                     m,
-                    m.question
+                    m.question,
+                    QwenLlm()
                 )
             )
         result = StudentSearchResultsAndAnswer(
@@ -197,6 +207,21 @@ class Rag:
             method="dataset"
         )
         print(f"Saved student_search_results to {save_directory}")
+
+    @staticmethod
+    def _sources_overlap(
+        expected_source: MinimalSource | MinimalSourceDataset,
+        retrieved_source: MinimalSource,
+    ) -> bool:
+        if expected_source.file_path != retrieved_source.file_path:
+            return False
+
+        return (
+            retrieved_source.first_character_index
+            < expected_source.last_character_index
+            and expected_source.first_character_index
+            < retrieved_source.last_character_index
+        )
 
     def _build_prompt(
         self,
@@ -229,37 +254,94 @@ class Rag:
     def evaluate(
         self,
         student_search_results_path: str = "",
-        dataset_path: str = ""
+        dataset_path: str = "",
     ) -> None:
-        """
-        Precision@k=Relevant Items Recommended % k in Top k
-        """
-        search, dataset = self._get_metrics(
+        search_results, dataset = self._get_metrics(
             student_search_results_path,
-            dataset_path
+            dataset_path,
         )
-        for item in tqdm(search.search_results, desc="Analyzing"):
-            if not self._have_match(item, dataset):
+
+        dataset_by_id = {
+            item.question_id: item
+            for item in dataset
+            if item.is_valid
+        }
+
+        total_relevant_sources_retrieved = 0
+        total_relevant_sources = 0
+        question_recalls: List[float] = []
+        evaluated_questions = 0
+
+        for search_result in tqdm(
+            search_results.search_results,
+            desc="Evaluating Recall@k",
+        ):
+            ground_truth = dataset_by_id.get(
+                search_result.question_id
+            )
+
+            if ground_truth is None:
                 continue
 
-    def _have_match(
-        self,
-        result: MinimalSearchResults,
-        dataset: List[CodeBaseResults]
-    ) -> int:
-        id = result.question_id
-        question = result.question
-        for item in dataset:
-            if (id, question) == (item.question_id, item.question):
-                return True
-        return False
+            relevant_sources = ground_truth.sources
 
+            if not relevant_sources:
+                continue
+
+            retrieved_sources = search_result.retrieved_sources[
+                :search_results.k
+            ]
+
+            relevant_expected_sources = sum(
+                any(
+                    self._sources_overlap(
+                        expected_source,
+                        retrieved_source,
+                    )
+                    for retrieved_source in retrieved_sources
+                )
+                for expected_source in relevant_sources
+            )
+
+            recall_at_k = (
+                relevant_expected_sources / len(relevant_sources)
+            )
+
+            question_recalls.append(recall_at_k)
+            total_relevant_sources_retrieved += relevant_expected_sources
+            total_relevant_sources += len(relevant_sources)
+            evaluated_questions += 1
+
+        if evaluated_questions == 0:
+            raise CliError(
+                "No valid questions with relevant sources "
+                "were found for evaluation."
+            )
+
+        macro_recall = (
+            sum(question_recalls) / evaluated_questions
+        )
+
+        micro_recall = (
+            total_relevant_sources_retrieved
+            / total_relevant_sources
+        )
+
+        print(f"Evaluation results (Recall@{search_results.k})")
+        print(f"Evaluated questions: {evaluated_questions}")
+        print(f"Macro Recall@k: {macro_recall:.4f}")
+        print(f"Micro Recall@k: {micro_recall:.4f}")
+        print(
+            "Relevant sources retrieved: "
+            f"{total_relevant_sources_retrieved}/"
+            f"{total_relevant_sources}"
+        )
 
     def _get_metrics(
         self,
         student_search_results_path: str,
         dataset_path: str
-    ) -> Tuple[StudentSearchResults, CodeBaseResults]:
+    ) -> Tuple[StudentSearchResults, List[CodeBaseResults]]:
         path_search = Path(student_search_results_path)
         path_dataset = Path(dataset_path)
         if not path_dataset.exists():

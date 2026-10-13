@@ -53,10 +53,10 @@ class JsonLoader:
     def load_data_obj(
             self,
             prefix: str,
-        ) -> list[CodeBaseResults]:
-            path = Path(prefix)
-            with open(path, "r") as file:
-                dataset = json.load(file)["rag_questions"]
-                return [
-                    CodeBaseResults.model_validate(m) for m in dataset
-                ]
+    ) -> list[CodeBaseResults]:
+        path = Path(prefix)
+        with open(path, "r") as file:
+            dataset = json.load(file)["rag_questions"]
+            return [
+                CodeBaseResults.model_validate(m) for m in dataset
+            ]

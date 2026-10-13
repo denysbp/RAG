@@ -2,9 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/examples-online-structured-outputs.iml" filepath="$PROJECT_DIR$/.idea/examples-online-structured-outputs.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/examples-online-structured-outputs@1.iml" filepath="$PROJECT_DIR$/.idea/examples-online-structured-outputs@1.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/rag.iml" filepath="$PROJECT_DIR$/.idea/rag.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/vllm.iml" filepath="$PROJECT_DIR$/.idea/vllm.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/vllm@1.iml" filepath="$PROJECT_DIR$/.idea/vllm@1.iml" />
     </modules>
   </component>
 </project>
