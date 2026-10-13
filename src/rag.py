@@ -36,7 +36,6 @@ class Rag:
         self._loader = JsonLoader()
         self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
         self._aswer_mode: bool = False
-        self._model: QwenLlm = QwenLlm()
 
     def index(
         self,
@@ -55,7 +54,7 @@ class Rag:
             self._chunker = Chunkernizer(value)
             self._chunker.files_processor()
             master = self._build_index(self._chunker)
-            self._loader.save(master, "master.json")
+            self._loader.save(master, "index.json")
             print(f"Ingestion complete! indexed {len(master)} ", end="")
             print(f"chunks under {self._loader.chunk_dir}")
 
@@ -63,16 +62,13 @@ class Rag:
         self,
         query: str,
         k: str = DEFAULT_K
-    ) -> StudentSearchResults:
+    ) -> MinimalSearchResults:
         query = to_sentence(query)
         self._numbers_validator(k)
         v = not self._aswer_mode
         result = self._search_query(query, int(k), show=v)
-        obj = StudentSearchResults(
-            search_results=[result],
-            k=int(k)
-        )
-        return obj
+
+        return result
 
     def search_dataset(
         self,
@@ -128,10 +124,11 @@ class Rag:
         if not query:
             raise CliError("Provide a usefull message")
         self.aswer_mode = True
+        self._model: QwenLlm = QwenLlm()
         search = self._search_query(query, int(k))
         console = Console()
         text = Text("Generating...", style="bold red")
-        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
+        with tqdm(desc="Generating"):
             obj = self._answer_question(search, query)
         return obj
 
@@ -182,26 +179,30 @@ class Rag:
             raise CliError(msg)
         console = Console()
         text = Text("Generating...", style="bold red")
-        with Live(Spinner("dots12", text=text, style="cyan"), console=console):
-            search_result = self._loader.load_obj(
-                student_search_results_path
-            )
-            anwers = [
+        self._model: QwenLlm = QwenLlm()
+        search_result = self._loader.load_obj(
+            student_search_results_path
+        )
+        anwers = []
+        for m in tqdm(search_result.search_results, desc="LLM working"):
+            anwers.append(
                 self._answer_question(
-                    m, m.question
-                ) for m in search_result.search_results
-            ]
-            result = StudentSearchResultsAndAnswer(
-                search_results=anwers,
-                k=search_result.k
+                    m,
+                    m.question
+                )
             )
-            file_name = Path(student_search_results_path).name
+        result = StudentSearchResultsAndAnswer(
+            search_results=anwers,
+            k=search_result.k
+        )
+        file_name = Path(student_search_results_path).name
 
-            self._loader.save(
-                result.model_dump(),
-                Path(save_directory) / file_name,
-                method="dataset"
-            )
+        self._loader.save(
+            result.model_dump(),
+            Path(save_directory) / file_name,
+            method="dataset"
+        )
+        print(f"Saved student_search_results to {save_directory}")
 
     def _build_prompt(
         self,
