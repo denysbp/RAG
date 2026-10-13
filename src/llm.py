@@ -78,7 +78,7 @@ class QwenLlm:
     def generate(
         self,
         messages: list[dict[str, str]],
-        max_new_tokens: int = 200,
+        max_new_tokens: int = 210,
         enable_thinking: bool = True,
     ) -> str:
         input_ids = self.encode_chat(

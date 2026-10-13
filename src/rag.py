@@ -10,22 +10,20 @@ from .models import (
     UnansweredQuestion,
     RagDataset,
     MinimalAnswer,
-    StudentSearchResultsAndAnswer
+    StudentSearchResultsAndAnswer,
+    CodeBaseResults,
+    MinimalSourceDataset
 )
 import fire
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from inspect import cleandoc
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
-from rich.console import Console
-from rich.spinner import Spinner
-from rich.text import Text
-from rich.live import Live
 from nocamel.converters import to_sentence
 
 
-DEFAULT_CHUNK_SIZE = "2000"
+DEFAULT_CHUNK_SIZE = "0"
 DEFAULT_K = "10"
 MAX_CHARACTER = 5000
 
@@ -36,6 +34,7 @@ class Rag:
         self._loader = JsonLoader()
         self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
         self._aswer_mode: bool = False
+
 
     def index(
         self,
@@ -63,7 +62,6 @@ class Rag:
         query: str,
         k: str = DEFAULT_K
     ) -> MinimalSearchResults:
-        query = to_sentence(query)
         self._numbers_validator(k)
         v = not self._aswer_mode
         result = self._search_query(query, int(k), show=v)
@@ -72,9 +70,9 @@ class Rag:
 
     def search_dataset(
         self,
-        dataset_path: str,
-        k: str,
-        save_directory: str,
+        dataset_path: str = "",
+        k: str = DEFAULT_K,
+        save_directory: str = "",
     ) -> None:
         if not self._numbers_validator(k):
             return
@@ -118,7 +116,7 @@ class Rag:
 
     def answer(
         self,
-        query: str,
+        query: str = "",
         k: str = DEFAULT_K
     ) -> MinimalAnswer:
         if not query:
@@ -126,8 +124,6 @@ class Rag:
         self.aswer_mode = True
         self._model: QwenLlm = QwenLlm()
         search = self._search_query(query, int(k))
-        console = Console()
-        text = Text("Generating...", style="bold red")
         with tqdm(desc="Generating"):
             obj = self._answer_question(search, query)
         return obj
@@ -155,7 +151,7 @@ class Rag:
 
     def answer_dataset(
         self,
-        student_search_results_path: str,
+        student_search_results_path: str = "",
         save_directory: str = ""
     ) -> None:
         path = Path(student_search_results_path)
@@ -177,8 +173,6 @@ class Rag:
                 """
             )
             raise CliError(msg)
-        console = Console()
-        text = Text("Generating...", style="bold red")
         self._model: QwenLlm = QwenLlm()
         search_result = self._loader.load_obj(
             student_search_results_path
@@ -234,10 +228,52 @@ class Rag:
 
     def evaluate(
         self,
+        student_search_results_path: str = "",
+        dataset_path: str = ""
+    ) -> None:
+        """
+        Precision@k=Relevant Items Recommended % k in Top k
+        """
+        search, dataset = self._get_metrics(
+            student_search_results_path,
+            dataset_path
+        )
+        for item in tqdm(search.search_results, desc="Analyzing"):
+            if not self._have_match(item, dataset):
+                continue
+
+    def _have_match(
+        self,
+        result: MinimalSearchResults,
+        dataset: List[CodeBaseResults]
+    ) -> int:
+        id = result.question_id
+        question = result.question
+        for item in dataset:
+            if (id, question) == (item.question_id, item.question):
+                return True
+        return False
+
+
+    def _get_metrics(
+        self,
         student_search_results_path: str,
         dataset_path: str
-    ) -> None:
-        pass
+    ) -> Tuple[StudentSearchResults, CodeBaseResults]:
+        path_search = Path(student_search_results_path)
+        path_dataset = Path(dataset_path)
+        if not path_dataset.exists():
+            raise CliError(
+                f"The provider path {path_dataset} don't exist"
+            )
+
+        if not path_search.exists():
+            raise CliError(
+                f"The provider path {path_search} don't exist"
+            )
+        search = self._loader.load_obj(str(path_search))
+        dataset = self._loader.load_data_obj(str(path_dataset))
+        return search, dataset
 
     def _numbers_validator(self, value: str) -> bool:
         if not isinstance(value, int) or isinstance(
@@ -285,7 +321,7 @@ class Rag:
             show_progress=True,
         )
         mapped_ids, _ = mapped.retrieve(
-            bm25s.tokenize(query),
+            bm25s.tokenize(to_sentence(query)),
             k=k,
             show_progress=True,
         )

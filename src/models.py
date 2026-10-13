@@ -14,6 +14,15 @@ class MinimalSource(BaseModel):
     text: str
 
 
+class MinimalSourceDataset(BaseModel):
+    """
+    The MinimalSource model represents
+    a single source of information
+    """
+    file_path: str
+    first_character_index: int
+    last_character_index: int
+
 """
 The UnansweredQuestion and
 AnsweredQuestion models represent an unanswered
@@ -29,7 +38,7 @@ class UnansweredQuestion(BaseModel):
 
 
 class AnsweredQuestion(UnansweredQuestion):
-    sources: List[MinimalSource]
+    sources: List[MinimalSource | MinimalSourceDataset]
     answer: str
 
 
@@ -40,6 +49,10 @@ class RagDataset(BaseModel):
     """
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
 
+
+class CodeBaseResults(AnsweredQuestion):
+    difficulty: str
+    is_valid: bool
 
 """
 The MinimalSearchResults and MinimalAnswer

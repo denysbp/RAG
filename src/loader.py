@@ -1,6 +1,6 @@
 import json
 from typing import Any
-from .models import MinimalSource, StudentSearchResults
+from .models import MinimalSource, StudentSearchResults, CodeBaseResults
 from pathlib import Path
 import numpy as np
 
@@ -49,3 +49,14 @@ class JsonLoader:
         path = Path(prefix)
         with open(path, "r") as file:
             return StudentSearchResults.model_validate(json.load(file))
+
+    def load_data_obj(
+            self,
+            prefix: str,
+        ) -> list[CodeBaseResults]:
+            path = Path(prefix)
+            with open(path, "r") as file:
+                dataset = json.load(file)["rag_questions"]
+                return [
+                    CodeBaseResults.model_validate(m) for m in dataset
+                ]
