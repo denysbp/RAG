@@ -33,6 +33,8 @@ run:
 	else \
 		uv run -m src; \
 	fi
+web:
+	uv run fastapi dev src/web.py
 
 clean:
 	rm -rf src/__pycache__

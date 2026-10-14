@@ -59,7 +59,7 @@ class Rag:
             "chunks": len(master),
             "directory": self._loader.chunk_dir + "/processed"
         }
-        
+
 
     def search(
         self,
@@ -192,14 +192,16 @@ class Rag:
             student_search_results_path
         )
         anwers = []
+        model = QwenLlm()
         for m in tqdm(search_result.search_results, desc="LLM working"):
             anwers.append(
                 self._answer_question(
                     m,
                     m.question,
-                    QwenLlm()
+                    model
                 )
             )
+        del(model)
         result = StudentSearchResultsAndAnswer(
             search_results=anwers,
             k=search_result.k
