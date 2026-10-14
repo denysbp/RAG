@@ -23,8 +23,6 @@ from tqdm import tqdm
 from nocamel.converters import to_sentence
 
 
-DEFAULT_CHUNK_SIZE = "0"
-DEFAULT_K = "10"
 MAX_CHARACTER = 5000
 
 
@@ -37,10 +35,9 @@ class Rag:
 
     def index(
         self,
-        max_chunk_size: str = DEFAULT_CHUNK_SIZE
-    ) -> str:
-        if not self._numbers_validator(max_chunk_size):
-            return
+        max_chunk_size: int = 0
+    ) -> dict:
+        self._numbers_validator(max_chunk_size)
         value = int(max_chunk_size)
         if value <= 0 or value > 2000:
             raise CliError(
@@ -55,27 +52,26 @@ class Rag:
         master = self._build_index(self._chunker)
         self._loader.save(master, "index.json")
         return {
-            "message": "Ingestion complete!",
+            "status": "Ingestion complete!",
             "chunks": len(master),
             "directory": self._loader.chunk_dir + "/processed"
         }
 
-
     def search(
         self,
         query: str,
-        k: str = DEFAULT_K
+        k: int
     ) -> MinimalSearchResults:
         self._numbers_validator(k)
         v = not self._aswer_mode
-        result = self._search_query(query, int(k), show=v)
+        result = self._search_query(query, k, show=v)
 
         return result
 
     def search_dataset(
         self,
         dataset_path: str = "",
-        k: str = DEFAULT_K,
+        k: int = 0,
         save_directory: str = "",
     ) -> None:
         if not self._numbers_validator(k):
@@ -106,11 +102,17 @@ class Rag:
             data_set.rag_questions,
             desc="searching",
         ):
-            search_result = self._search_query(
-                question.question,
-                int(k),
-                show=False,
-            )
+            try:
+                search_result = self._search_query(
+                    question.question,
+                    k,
+                    show=False,
+                )
+            except TypeError:
+                raise CliError(
+                    f"{question.question} This value broke the program"
+                    f"We can't retrive it"
+                )
 
             search_result.question_id = question.question_id
 
@@ -118,7 +120,7 @@ class Rag:
 
         result = StudentSearchResults(
             search_results=search_results,
-            k=int(k),
+            k=k,
         )
         file_name = "/" + str(Path(dataset_path).name)
 
@@ -132,37 +134,22 @@ class Rag:
     def answer(
         self,
         query: str = "",
-        k: str = DEFAULT_K
+        k: int = 0
     ) -> MinimalAnswer:
         if not query:
             raise CliError("Provide a usefull message")
+        self._numbers_validator(k)
         self.aswer_mode = True
-        search = self._search_query(query, int(k))
+        try:
+            search = self._search_query(query, k)
+        except TypeError:
+            raise CliError(
+                f"{query} This value broke the program"
+                f"We can't retrive it"
+            )
         with tqdm(desc="Generating"):
             obj = self._answer_question(search, query, QwenLlm())
         return obj
-
-    def _answer_question(
-        self,
-        search: MinimalSearchResults,
-        query: str,
-        model: QwenLlm
-    ) -> MinimalAnswer:
-        prompt = self._build_prompt(
-            query,
-            search
-        )
-        asnwer = model.generate(
-            prompt,
-            enable_thinking=False
-        )
-
-        return MinimalAnswer(
-            question_id=search.question_id,
-            question=search.question,
-            retrieved_sources=search.retrieved_sources,
-            answer=asnwer
-        )
 
     def answer_dataset(
         self,
@@ -188,7 +175,7 @@ class Rag:
                 """
             )
             raise CliError(msg)
-        search_result = self._loader.load_obj(
+        search_result: StudentSearchResults = self._loader.load_obj(
             student_search_results_path
         )
         anwers = []
@@ -201,7 +188,7 @@ class Rag:
                     model
                 )
             )
-        del(model)
+        del model
         result = StudentSearchResultsAndAnswer(
             search_results=anwers,
             k=search_result.k
@@ -214,49 +201,6 @@ class Rag:
             method="dataset"
         )
         print(f"Saved student_search_results to {save_directory}")
-
-    @staticmethod
-    def _sources_overlap(
-        expected_source: MinimalSource | MinimalSourceDataset,
-        retrieved_source: MinimalSource,
-    ) -> bool:
-        if expected_source.file_path != retrieved_source.file_path:
-            return False
-
-        return (
-            retrieved_source.first_character_index
-            < expected_source.last_character_index
-            and expected_source.first_character_index
-            < retrieved_source.last_character_index
-        )
-
-    def _build_prompt(
-        self,
-        question: str,
-        search_results: MinimalSearchResults,
-    ) -> List[Dict]:
-        context = ""
-        for search in search_results.retrieved_sources:
-            context += search.text + "\n\n"
-        system_content = """
-        You are a question-answering assistant.
-
-        Answer the user's question using the provided context.
-        Focus on information relevant to the question.
-        Ignore unrelated code, tests, and examples.
-        Do not answer unrelated questions.
-        If the context does not contain enough information,
-        clearly state that.
-        """
-        user_content = (
-            f"Context:\n{context}\n\n"
-            f"Question: {question}\n\n"
-            "Answer:"
-        )
-        return [
-            {"role": "system", "content": cleandoc(system_content)},
-            {"role": "user", "content": user_content},
-        ]
 
     def evaluate(
         self,
@@ -344,6 +288,71 @@ class Rag:
             f"{total_relevant_sources}"
         )
 
+    def _answer_question(
+        self,
+        search: MinimalSearchResults,
+        query: str,
+        model: QwenLlm
+    ) -> MinimalAnswer:
+        prompt = self._build_prompt(
+            query,
+            search
+        )
+        asnwer = model.generate(
+            prompt,
+            enable_thinking=False
+        )
+
+        return MinimalAnswer(
+            question_id=search.question_id,
+            question=search.question,
+            retrieved_sources=search.retrieved_sources,
+            answer=asnwer
+        )
+
+    @staticmethod
+    def _sources_overlap(
+        expected_source: MinimalSource | MinimalSourceDataset,
+        retrieved_source: MinimalSource,
+    ) -> bool:
+        if expected_source.file_path != retrieved_source.file_path:
+            return False
+
+        return (
+            retrieved_source.first_character_index
+            < expected_source.last_character_index
+            and expected_source.first_character_index
+            < retrieved_source.last_character_index
+        )
+
+    def _build_prompt(
+        self,
+        question: str,
+        search_results: MinimalSearchResults,
+    ) -> List[Dict]:
+        context = ""
+        for search in search_results.retrieved_sources:
+            context += search.text + "\n\n"
+        system_content = """
+        You are a question-answering assistant.
+
+        Answer the user's question using the provided context.
+        Focus on information relevant to the question.
+        Ignore unrelated code, tests, and examples.
+        Do not answer unrelated questions.
+        If the context does not contain enough information,
+        clearly state that.
+        """
+        user_content = (
+            f"Context:\n{context}\n\n"
+            f"Question: {question}\n\n"
+            "Answer:"
+        )
+        return [
+            {"role": "system", "content": cleandoc(system_content)},
+            {"role": "user", "content": user_content},
+        ]
+
     def _get_metrics(
         self,
         student_search_results_path: str,
@@ -364,7 +373,7 @@ class Rag:
         dataset = self._loader.load_data_obj(str(path_dataset))
         return search, dataset
 
-    def _numbers_validator(self, value: str) -> bool:
+    def _numbers_validator(self, value: str | int) -> bool:
         if not isinstance(value, int) or isinstance(
             value,
             bool

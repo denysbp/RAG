@@ -5,18 +5,18 @@ from .exceptions import (
     FileError
 )
 from fire import Fire
+from pydantic import ValidationError
 
 
 if __name__ == "__main__":
     try:
         Fire(Rag)
-    except ChunkError as e:
-        print(e)
-    except CliError as e:
-        print(e)
-    except FileError as e:
-        print(e.args[1])
-    except IOError as e:
+    except (
+        ChunkError,
+        CliError,
+        ValidationError,
+        FileError
+    ) as e:
         print(e)
     except KeyboardInterrupt:
         print("Program stoped")

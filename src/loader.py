@@ -3,6 +3,7 @@ from typing import Any
 from .models import MinimalSource, StudentSearchResults, CodeBaseResults
 from pathlib import Path
 import numpy as np
+from .exceptions import FileError
 
 
 class JsonLoader:
@@ -26,8 +27,13 @@ class JsonLoader:
         )
         if isinstance(obj, list):
             obj = [m.model_dump() for m in obj]
-        with open(out_path, "w+", encoding="utf-8") as file:
-            json.dump(obj, file, indent=2)
+        try:
+            with open(out_path, "w+", encoding="utf-8") as file:
+                json.dump(obj, file, indent=2)
+        except IOError:
+            raise FileError(
+                f"{prefix} we don't have permission to write"
+            )
 
     def load(
         self,
@@ -35,28 +41,45 @@ class JsonLoader:
         dir: str = "processed",
         obj: Any = MinimalSource
     ) -> np.ndarray[Any, Any]:
-        path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
-        with open(path, "r") as file:
-            return np.array(
-                [obj.model_validate(m) for m in json.load(file)],
-                dtype=object
+        try:
+            path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
+            with open(path, "r") as file:
+                return np.array(
+                    [obj.model_validate(m) for m in json.load(file)],
+                    dtype=object
+                )
+        except IOError:
+            raise FileError(
+                f"{prefix} can't be read"
             )
 
     def load_obj(
         self,
         prefix: str,
     ) -> StudentSearchResults:
-        path = Path(prefix)
-        with open(path, "r") as file:
-            return StudentSearchResults.model_validate(json.load(file))
+        try:
+            path = Path(prefix)
+            with open(path, "r") as file:
+                return StudentSearchResults.model_validate(
+                    json.load(file)
+                )
+        except IOError:
+            raise FileError(
+                f"{prefix} can't be read"
+            )
 
     def load_data_obj(
             self,
             prefix: str,
     ) -> list[CodeBaseResults]:
-        path = Path(prefix)
-        with open(path, "r") as file:
-            dataset = json.load(file)["rag_questions"]
-            return [
-                CodeBaseResults.model_validate(m) for m in dataset
-            ]
+        try:
+            path = Path(prefix)
+            with open(path, "r") as file:
+                dataset = json.load(file)["rag_questions"]
+                return [
+                    CodeBaseResults.model_validate(m) for m in dataset
+                ]
+        except IOError:
+            raise FileError(
+                f"{prefix} can't be read"
+            )
