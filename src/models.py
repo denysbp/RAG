@@ -88,3 +88,8 @@ class StudentSearchResults(BaseModel):
 class StudentSearchResultsAndAnswer(BaseModel):
     search_results: List[MinimalAnswer]
     k: int
+
+
+class IndexCache(BaseModel):
+    max_chunk_size: int
+    last_acess: float
