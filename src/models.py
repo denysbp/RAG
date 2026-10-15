@@ -102,3 +102,16 @@ class QueryCache(BaseModel):
     k: int
     last_acess: float
     search_results: MinimalSearchResults
+
+
+class IncrementalIndex(BaseModel):
+    file_path: str
+    hash_id: str
+    sources: List[MinimalSource]
+
+
+class FileState(BaseModel):
+    unchanged: List[str] = Field(default_factory=list)
+    changed: List[str] = Field(default_factory=list)
+    new: List[str] = Field(default_factory=list)
+    deleted: List[str] = Field(default_factory=list)

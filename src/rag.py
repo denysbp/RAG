@@ -38,11 +38,10 @@ class Rag:
         self._chunker: Chunkernizer
         self._loader = JsonLoader()
         self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
-        self._aswer_mode: bool = False
 
     def index(
         self,
-        max_chunk_size: int = 0
+        max_chunk_size: int = 2000
     ) -> dict:
         self._numbers_validator(max_chunk_size)
         cond, model = laod_index_cache(INDEX_FILE, max_chunk_size)
@@ -79,12 +78,16 @@ class Rag:
         self,
         query: str,
         k: int
-    ) -> MinimalSearchResults:
+    ) -> list[str]:
         self._numbers_validator(k)
-        v = not self._aswer_mode
-        result = self._search_query(query, k, show=v)
-
-        return result
+        result = self._search_query(query, k)
+        out_put = []
+        for m in result.retrieved_sources:
+            msg = m.file_path
+            msg += f" [{m.first_character_index}:"
+            msg += f" {m.last_character_index}]"
+            out_put.append(msg)
+        return out_put
 
     def search_dataset(
         self,
@@ -124,7 +127,6 @@ class Rag:
                 search_result = self._search_query(
                     question.question,
                     k,
-                    show=False,
                 )
             except TypeError:
                 raise CliError(
@@ -157,7 +159,6 @@ class Rag:
         if not query:
             raise CliError("Provide a usefull message")
         self._numbers_validator(k)
-        self.aswer_mode = True
         try:
             search = self._search_query(query, k)
         except TypeError:
@@ -421,7 +422,6 @@ class Rag:
         self,
         query: str,
         k: int,
-        show: bool = False
     ) -> MinimalSearchResults:
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
@@ -437,14 +437,6 @@ class Rag:
         )
 
         if cached is not None:
-            if show:
-                for obj in cached.retrieved_sources:
-                    index = (
-                        f"{obj.first_character_index}:"
-                        f"{obj.last_character_index}"
-                    )
-                    print(obj.file_path, f"[{index}]")
-
             return cached
         if k <= 0 or k > master.size:
             raise CliError(
@@ -464,10 +456,6 @@ class Rag:
         for doc_id in mapped_ids[0]:
             minimal: MinimalSource = master[int(doc_id)]
             sources.append(minimal)
-            if show:
-                index = f"{minimal.first_character_index}:"
-                index += f"{minimal.last_character_index}"
-                print(minimal.file_path, f"[{index}]")
         question = UnansweredQuestion(question=query)
         result = MinimalSearchResults(
             question_id=question.question_id,

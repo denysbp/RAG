@@ -1,18 +1,30 @@
-import hashlib
-from pathlib import Path
-import json
 from .models import (
     IndexCache,
     QueryCache,
-    MinimalSearchResults
+    MinimalSearchResults,
+    IncrementalIndex,
+    MinimalSource
 )
-from typing import Tuple, Optional
+from .chunker import Chunkernizer
+from typing import (
+    Tuple,
+    Optional,
+    List,
+    Set
+)
 from pydantic import ValidationError
+import hashlib
+from pathlib import Path
+import json
+from tqdm import tqdm
+
 
 CACHE_DIR = Path(".cache")
 CACHE_INDEX = CACHE_DIR / "index_cache.json"
 CACHE_QUERY = CACHE_DIR / "query_cache.json"
+INCREMENTAL_INDEX = CACHE_DIR / "incremental_cache.json"
 BM25_PATH = Path("data/processed/bm25")
+MASTER_PATH = Path("data/processed/index.json")
 
 
 def laod_index_cache(
@@ -178,6 +190,28 @@ def file_hash(path: str) -> str:
     return digest.hexdigest()
 
 
+def get_chunks(file_path: str) -> List[MinimalSource]:
+    with MASTER_PATH.open("r", encoding="utf-8") as file:
+        return [
+            MinimalSource.model_validate(m)
+            for m in json.load(file)
+            if m["file_path"] == file_path
+        ]
+
+
+def save_incremental_index(files: Set[str]) -> None:
+    sources: List[dict] = []
+    for file in tqdm(files, desc="Saving cache"):
+        obj = IncrementalIndex(
+            file_path=file,
+            hash_id=file_hash(file),
+            sources=get_chunks(file)
+        ).model_dump()
+        sources.append(obj)
+    with open(INCREMENTAL_INDEX, "w") as file:
+        json.dump(sources, file, indent=2)
+
+
 if __name__ == "__main__":
-    save_cache_index("data/processed/index.json", 2000)
-    print(laod_index_cache("data/processed/index.json", 2000))
+    chunker = Chunkernizer(2000)
+    save_incremental_index(chunker.paths)

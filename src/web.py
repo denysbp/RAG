@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from .rag import Rag
 from .exceptions import CliError, FileError
-from .models import MinimalSearchResults
 from pydantic import ValidationError
+from typing import List
 app = FastAPI()
 rag = Rag()
 
@@ -19,7 +19,7 @@ def index(max_chunk_size: int) -> dict:
 
 
 @app.post("/search/")
-def search(query: str, k: int) -> MinimalSearchResults:
+def search(query: str, k: int) -> List:
     try:
         return rag.search(
             query,
