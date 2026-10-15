@@ -93,3 +93,12 @@ class StudentSearchResultsAndAnswer(BaseModel):
 class IndexCache(BaseModel):
     max_chunk_size: int
     last_acess: float
+    status: str
+
+
+class QueryCache(BaseModel):
+    indexed: int
+    query: str
+    k: int
+    last_acess: float
+    search_results: MinimalSearchResults

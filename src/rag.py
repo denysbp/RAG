@@ -14,6 +14,12 @@ from .models import (
     CodeBaseResults,
     MinimalSourceDataset
 )
+from .cache import (
+    save_cache_index,
+    laod_index_cache,
+    load_cache_query,
+    save_cache_query
+)
 import fire
 from typing import List, Dict, Tuple
 from inspect import cleandoc
@@ -24,6 +30,7 @@ from nocamel.converters import to_sentence
 
 
 MAX_CHARACTER = 5000
+INDEX_FILE = "data/processed/index.json"
 
 
 class Rag:
@@ -38,6 +45,13 @@ class Rag:
         max_chunk_size: int = 0
     ) -> dict:
         self._numbers_validator(max_chunk_size)
+        cond, model = laod_index_cache(INDEX_FILE, max_chunk_size)
+        if cond and model is not None:
+            return {
+                "status": model.status,
+                "directory": self._loader.chunk_dir + "/processed"
+            }
+
         value = int(max_chunk_size)
         if value <= 0 or value > 2000:
             raise CliError(
@@ -51,6 +65,10 @@ class Rag:
         self._chunker.files_processor()
         master = self._build_index(self._chunker)
         self._loader.save(master, "index.json")
+        save_cache_index(
+            INDEX_FILE,
+            max_chunk_size,
+        )
         return {
             "status": "Ingestion complete!",
             "chunks": len(master),
@@ -409,6 +427,25 @@ class Rag:
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
         master = self._loader.load("index.json")
+        chunk_size = master.size
+
+        cached = load_cache_query(
+            file_path=str(path),
+            query=query,
+            k=k,
+            chunk_size=chunk_size,
+        )
+
+        if cached is not None:
+            if show:
+                for obj in cached.retrieved_sources:
+                    index = (
+                        f"{obj.first_character_index}:"
+                        f"{obj.last_character_index}"
+                    )
+                    print(obj.file_path, f"[{index}]")
+
+            return cached
         if k <= 0 or k > master.size:
             raise CliError(
                 f"k: should be '> 0 and <= {master.size}' <index size>"
@@ -425,18 +462,26 @@ class Rag:
         )
         sources = []
         for doc_id in mapped_ids[0]:
-            obj: MinimalSource = master[int(doc_id)]
-            sources.append(obj)
+            minimal: MinimalSource = master[int(doc_id)]
+            sources.append(minimal)
             if show:
-                index = f"{obj.first_character_index}:"
-                index += f"{obj.last_character_index}"
-                print(obj.file_path, f"[{index}]")
+                index = f"{minimal.first_character_index}:"
+                index += f"{minimal.last_character_index}"
+                print(minimal.file_path, f"[{index}]")
         question = UnansweredQuestion(question=query)
-        return MinimalSearchResults(
+        result = MinimalSearchResults(
             question_id=question.question_id,
             question=question.question,
             retrieved_sources=sources
         )
+        save_cache_query(
+            file_path=str(path),
+            query=query,
+            k=k,
+            chunk_size=master.size,
+            search_results=result,
+        )
+        return result
 
 
 if __name__ == "__main__":

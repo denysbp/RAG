@@ -125,9 +125,9 @@ class Chunkernizer:
             text = self._load_file(path)
             if not text:
                 continue
-            if ".md" in path:
+            if Path(path).suffix.lower() == ".md":
                 self._chunk_markdown_file(text, path)
-            elif ".txt" in path:
+            elif Path(path).suffix.lower() == ".txt":
                 self._chunk_file(text, path)
-            elif ".py" in path:
+            elif Path(path).suffix.lower() == ".py":
                 self._chunk_python_file(text, path)

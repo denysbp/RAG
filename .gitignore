@@ -13,4 +13,5 @@ wheels/
 
 data/processed
 data/output/
-sgoinfree/
+.mypy_cache
+.cache
