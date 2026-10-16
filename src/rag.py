@@ -18,7 +18,11 @@ from .cache import (
     save_cache_index,
     laod_index_cache,
     load_cache_query,
-    save_cache_query
+    save_cache_query,
+    save_incremental_index,
+    apply_incremental_index,
+    incremental_state,
+    use_incremental
 )
 import fire
 from typing import List, Dict, Tuple
@@ -39,39 +43,62 @@ class Rag:
         self._loader = JsonLoader()
         self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
 
-    def index(
-        self,
-        max_chunk_size: int = 2000
-    ) -> dict:
+    def index(self, max_chunk_size: int = 2000) -> dict:
         self._numbers_validator(max_chunk_size)
-        cond, model = laod_index_cache(INDEX_FILE, max_chunk_size)
-        if cond and model is not None:
-            return {
-                "status": model.status,
-                "directory": self._loader.chunk_dir + "/processed"
-            }
 
         value = int(max_chunk_size)
+
         if value <= 0 or value > 2000:
             raise CliError(
                 cleandoc(
                     """
-                    Chunk size should be '> 0 and  <= 2000'
+                    Chunk size should be '> 0 and <= 2000'
                     """
                 )
             )
+
         self._chunker = Chunkernizer(value)
+
+        if use_incremental(value):
+            files = incremental_state(set(self._chunker.paths))
+
+            if files is not None:
+                master = apply_incremental_index(
+                    files,
+                    self._loader,
+                    self._chunker,
+                )
+
+                save_incremental_index(
+                    set(self._chunker.paths),
+                    value,
+                )
+
+                save_cache_index(INDEX_FILE, value)
+
+                return {
+                    "status": "Incremental index updated!",
+                    "chunks": len(master),
+                    "directory": self._loader.chunk_dir + "/processed",
+                }
+
         self._chunker.files_processor()
+
         master = self._build_index(self._chunker)
+
         self._loader.save(master, "index.json")
-        save_cache_index(
-            INDEX_FILE,
-            max_chunk_size,
+
+        save_incremental_index(
+            set(self._chunker.paths),
+            value,
         )
+
+        save_cache_index(INDEX_FILE, value)
+
         return {
             "status": "Ingestion complete!",
             "chunks": len(master),
-            "directory": self._loader.chunk_dir + "/processed"
+            "directory": self._loader.chunk_dir + "/processed",
         }
 
     def search(

@@ -108,7 +108,6 @@ class QueryCache(BaseModel):
 class IncrementalIndex(BaseModel):
     file_path: str
     last_acess: float
-    sources: List[MinimalSource]
 
 
 class FilesState(BaseModel):

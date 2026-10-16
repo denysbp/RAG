@@ -7,6 +7,7 @@ from .models import (
     FilesState,
     FileState
 )
+from .loader import JsonLoader
 from .chunker import Chunkernizer
 from typing import (
     Tuple,
@@ -202,7 +203,6 @@ def save_incremental_index(files: Set[str], size: int) -> None:
         obj = IncrementalIndex(
             file_path=file,
             last_acess=file_hash(file),
-            sources=get_chunks(file)
         ).model_dump()
         sources[file] = obj
     sources["paths"] = list(files)
@@ -221,6 +221,35 @@ def get_state(file_path: str, data: IncrementalIndex) -> FileState:
     if last_acess == data.last_acess:
         return FileState.UNCHANGED
     return FileState.NEW
+
+
+def use_incremental(max_chunk_size: int) -> bool:
+    if not INCREMENTAL_INDEX.is_file():
+        return False
+
+    if not CACHE_INDEX.is_file():
+        return False
+
+    try:
+        with INCREMENTAL_INDEX.open("r", encoding="utf-8") as file:
+            incremental_cache = json.load(file)
+
+        with CACHE_INDEX.open("r", encoding="utf-8") as file:
+            index_cache = json.load(file)
+
+        if not incremental_cache or not index_cache:
+            return False
+
+        last_index = IndexCache.model_validate(index_cache)
+
+        return (
+            incremental_cache.get("size") == max_chunk_size
+            and last_index.max_chunk_size == max_chunk_size
+            and MASTER_PATH.is_file()
+        )
+
+    except (OSError, ValueError, ValidationError, TypeError):
+        return False
 
 
 def incremental_state(files: Set[str]) -> Optional[FilesState]:
@@ -259,34 +288,56 @@ def apply_changed(
     master: List[MinimalSource]
 ) -> List[MinimalSource]:
     chunks = chunker.single_processor(file)
-    valids = [
+    if chunks is None:
+        return []
+    master = [
         chunk for chunk in master
         if chunk.file_path != file
     ]
-    valids.extend(
-        chunks
-    )
-    return valids
+    if chunks:
+        master.extend(
+            chunks
+        )
+    return master
 
 
-def apply_deleted(file: str) -> None:
-    ...
+def apply_deleted(
+    file: str,
+    master: List[MinimalSource]
+) -> None:
+    return [
+        chunk for chunk in master
+        if chunk.file_path != file
+    ]
 
 
-def apply_new(file: str) -> None:
-    ...
+def apply_new(
+    file: str,
+    master: List[MinimalSource],
+    chunker: Chunkernizer
+) -> None:
+    chunks = chunker.single_processor(file)
+    if chunks:
+        master.extend(chunks)
+    return master
 
 
-def aplly_incremental_index(files: FilesState) -> None:
-    for model in files.changed:
-        apply_changed(model)
-    for model in files.deleted:
-        apply_deleted(model)
-    for model in files.new:
-        apply_new(model)
+def apply_incremental_index(
+    files: FilesState,
+    loader: JsonLoader,
+    chunker: Chunkernizer,
+) -> List[MinimalSource]:
+    master = loader.load("index.json")
 
+    for file in files.deleted:
+        master = apply_deleted(file, master)
 
-if __name__ == "__main__":
-    chunker = Chunkernizer(2000)
-    save_incremental_index(chunker.paths, 2000)
-    # print(len(incremental_state(chunker.paths).deleted))
+    for file in files.changed:
+        master = apply_changed(file, chunker, master)
+
+    for file in files.new:
+        master = apply_new(file, master, chunker)
+
+    loader.save(list(master), "index.json")
+
+    return master
