@@ -13,7 +13,7 @@ from typing import (
     Optional,
     List,
     Set,
-    Any
+    Any,
 )
 from pydantic import ValidationError
 from pathlib import Path
@@ -253,8 +253,20 @@ def incremental_state(files: Set[str]) -> Optional[FilesState]:
     return FilesState.model_validate(states)
 
 
-def apply_changed(file: str) -> None:
-    ...
+def apply_changed(
+    file: str,
+    chunker: Chunkernizer,
+    master: List[MinimalSource]
+) -> List[MinimalSource]:
+    chunks = chunker.single_processor(file)
+    valids = [
+        chunk for chunk in master
+        if chunk.file_path != file
+    ]
+    valids.extend(
+        chunks
+    )
+    return valids
 
 
 def apply_deleted(file: str) -> None:
