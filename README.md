@@ -1,1 +1,2 @@
-Fazer o bonus incremental index
+TODO:
+	IMPLEMENTAR AS FUNCOES APPLY PARA O INCREMENTAL_APPLY

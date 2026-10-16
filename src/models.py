@@ -116,6 +116,7 @@ class FilesState(BaseModel):
     changed: List[str] = Field(default_factory=list)
     new: List[str] = Field(default_factory=list)
     deleted: List[str] = Field(default_factory=list)
+    size: int
 
 
 class FileState(Enum):

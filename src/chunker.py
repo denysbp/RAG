@@ -3,7 +3,7 @@ from langchain_text_splitters import (
     Language,
 )
 from pathlib import Path
-from typing import Set, List
+from typing import Set, List, Optional
 from .models import MinimalSource
 from .exceptions import FileError
 from inspect import cleandoc
@@ -50,9 +50,9 @@ class Chunkernizer:
             if file_path.is_file():
                 self.paths.add(str(file_path))
 
-    def _chunk_file(self, text: str, path: str) -> None:
+    def _chunk_file(self, text: str, path: str) -> List[MinimalSource]:
         documents = self.spliter.create_documents([text])
-
+        chunks = []
         for document in documents:
             source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
@@ -63,11 +63,12 @@ class Chunkernizer:
                 "last_character_index": end,
                 "text": source.lower()
             })
-            self.chunks.append(model)
+            chunks.append(model)
+        return chunks
 
-    def _chunk_python_file(self, text: str, path: str) -> None:
+    def _chunk_python_file(self, text: str, path: str) -> List[MinimalSource]:
         documents = self.py_spliter.create_documents([text])
-
+        py_chunks = []
         for document in documents:
             source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
@@ -78,11 +79,16 @@ class Chunkernizer:
                 "last_character_index": end,
                 "text": source.lower()
             })
-            self.py_chunks.append(model)
+            py_chunks.append(model)
+        return py_chunks
 
-    def _chunk_markdown_file(self, text: str, path: str) -> None:
+    def _chunk_markdown_file(
+        self,
+        text: str,
+        path: str
+    ) -> List[MinimalSource]:
         documents = self.md_spliter.create_documents([text])
-
+        md_chunks = []
         for document in documents:
             source = to_sentence(document.page_content)
             start = document.metadata["start_index"]
@@ -93,7 +99,8 @@ class Chunkernizer:
                 "last_character_index": end,
                 "text": source.lower()
             })
-            self.md_chunks.append(model)
+            md_chunks.append(model)
+        return md_chunks
 
     def _load_file(self, path: str) -> str:
         try:
@@ -126,8 +133,27 @@ class Chunkernizer:
             if not text:
                 continue
             if Path(path).suffix.lower() == ".md":
-                self._chunk_markdown_file(text, path)
+                self.md_chunks.extend(
+                    self._chunk_markdown_file(text, path)
+                )
             elif Path(path).suffix.lower() == ".txt":
-                self._chunk_file(text, path)
+                self.chunks.extend(
+                    self._chunk_file(text, path)
+                )
             elif Path(path).suffix.lower() == ".py":
-                self._chunk_python_file(text, path)
+                self.py_chunks.extend(
+                    self._chunk_python_file(text, path)
+                )
+
+    def single_processor(self, file: str) -> Optional[List[MinimalSource]]:
+        path = Path(file)
+        text = self._load_file(file)
+        if not text:
+            return None
+        if path.suffix.lower() == ".md":
+            return self._chunk_markdown_file(text, file)
+        elif path.suffix.lower() == ".txt":
+            return self._chunk_file(text, file)
+        elif path.suffix.lower() == ".py":
+            return self._chunk_python_file(text, file)
+        return None

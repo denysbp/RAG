@@ -192,7 +192,11 @@ def get_chunks(file_path: str) -> List[MinimalSource]:
         ]
 
 
-def save_incremental_index(files: Set[str]) -> None:
+def save_incremental_index(files: Set[str], size: int) -> None:
+    INCREMENTAL_INDEX.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
     sources: dict[Any, Any] = {}
     for file in tqdm(files, desc="Saving cache"):
         obj = IncrementalIndex(
@@ -202,6 +206,7 @@ def save_incremental_index(files: Set[str]) -> None:
         ).model_dump()
         sources[file] = obj
     sources["paths"] = list(files)
+    sources["size"] = size
     with open(INCREMENTAL_INDEX, "w") as file:
         json.dump(sources, file, indent=2)
 
@@ -244,10 +249,32 @@ def incremental_state(files: Set[str]) -> Optional[FilesState]:
                 model
             )
             states[state.value].append(file)
+    states["size"] = cache["size"]
     return FilesState.model_validate(states)
+
+
+def apply_changed(file: str) -> None:
+    ...
+
+
+def apply_deleted(file: str) -> None:
+    ...
+
+
+def apply_new(file: str) -> None:
+    ...
+
+
+def aplly_incremental_index(files: FilesState) -> None:
+    for model in files.changed:
+        apply_changed(model)
+    for model in files.deleted:
+        apply_deleted(model)
+    for model in files.new:
+        apply_new(model)
 
 
 if __name__ == "__main__":
     chunker = Chunkernizer(2000)
-    # save_incremental_index(chunker.paths)
+    save_incremental_index(chunker.paths, 2000)
     # print(len(incremental_state(chunker.paths).deleted))
