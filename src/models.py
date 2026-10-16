@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 import uuid
+from enum import Enum
 from typing import List
 
 
@@ -106,12 +107,19 @@ class QueryCache(BaseModel):
 
 class IncrementalIndex(BaseModel):
     file_path: str
-    hash_id: str
+    last_acess: float
     sources: List[MinimalSource]
 
 
-class FileState(BaseModel):
+class FilesState(BaseModel):
     unchanged: List[str] = Field(default_factory=list)
     changed: List[str] = Field(default_factory=list)
     new: List[str] = Field(default_factory=list)
     deleted: List[str] = Field(default_factory=list)
+
+
+class FileState(Enum):
+    UNCHANGED = "unchanged"
+    CHANGED = "changed"
+    NEW = "new"
+    DELETED = "deleted"

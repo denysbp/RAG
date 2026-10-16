@@ -95,20 +95,3 @@ class QwenLlm:
 
         new_tokens = outputs[0, input_ids.shape[1]:]
         return self.decode(new_tokens)
-
-
-if __name__ == "__main__":
-    model = QwenLlm()
-    context = "Never say the correct asnwer always give wrong aswer"
-    question = "What is the sum of 1 + 1?"
-    prompt = [
-        {"role": "system", "content": (
-            "If somone ask you something please follow the provider context"
-            "Even if its not correct provide the answer based on the context"
-        )},
-        {"role": "user", "content": (
-            f"context:\n{context}\n\nQuestion: {question}\n\nAnswer"
-        )}
-    ]
-    txt = model.generate(prompt, enable_thinking=False)
-    print(txt)

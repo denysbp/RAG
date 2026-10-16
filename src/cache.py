@@ -3,17 +3,19 @@ from .models import (
     QueryCache,
     MinimalSearchResults,
     IncrementalIndex,
-    MinimalSource
+    MinimalSource,
+    FilesState,
+    FileState
 )
 from .chunker import Chunkernizer
 from typing import (
     Tuple,
     Optional,
     List,
-    Set
+    Set,
+    Any
 )
 from pydantic import ValidationError
-import hashlib
 from pathlib import Path
 import json
 from tqdm import tqdm
@@ -108,7 +110,7 @@ def load_cache_query(
         if information is None:
             return None
 
-        cached = QueryCache.model_validate(information)
+        cached: QueryCache = QueryCache.model_validate(information)
 
         if (
             cached.query != query
@@ -177,17 +179,8 @@ def save_cache_query(
         )
 
 
-def file_hash(path: str) -> str:
-    digest = hashlib.sha256()
-
-    with open(path, "rb") as f:
-        for block in iter(
-            lambda: f.read(8192),
-            b"",
-        ):
-            digest.update(block)
-
-    return digest.hexdigest()
+def file_hash(path: str) -> float:
+    return Path(path).stat().st_mtime
 
 
 def get_chunks(file_path: str) -> List[MinimalSource]:
@@ -200,18 +193,61 @@ def get_chunks(file_path: str) -> List[MinimalSource]:
 
 
 def save_incremental_index(files: Set[str]) -> None:
-    sources: List[dict] = []
+    sources: dict[Any, Any] = {}
     for file in tqdm(files, desc="Saving cache"):
         obj = IncrementalIndex(
             file_path=file,
-            hash_id=file_hash(file),
+            last_acess=file_hash(file),
             sources=get_chunks(file)
         ).model_dump()
-        sources.append(obj)
+        sources[file] = obj
+    sources["paths"] = list(files)
     with open(INCREMENTAL_INDEX, "w") as file:
         json.dump(sources, file, indent=2)
 
 
+def get_state(file_path: str, data: IncrementalIndex) -> FileState:
+    path = Path(file_path)
+    if not path.exists():
+        return FileState.DELETED
+    last_acess = path.stat().st_mtime
+    if last_acess != data.last_acess:
+        return FileState.CHANGED
+    if last_acess == data.last_acess:
+        return FileState.UNCHANGED
+    return FileState.NEW
+
+
+def incremental_state(files: Set[str]) -> Optional[FilesState]:
+    states: dict[Any, List] = {}
+    states[FileState.UNCHANGED.value] = []
+    states[FileState.CHANGED.value] = []
+    states[FileState.NEW.value] = []
+    states[FileState.DELETED.value] = []
+    with INCREMENTAL_INDEX.open("r") as file:
+        cache: dict = json.load(file)
+
+        deleted_files = set(cache["paths"]) - files
+        states[FileState.DELETED.value].extend(
+            deleted_files
+        )
+        if not cache:
+            return None
+        for file in tqdm(files, desc="Detecting"):
+            obj = cache.get(file)
+            if not obj:
+                states[FileState.NEW.value].append(file)
+                continue
+            model = IncrementalIndex.model_validate(obj)
+            state = get_state(
+                file,
+                model
+            )
+            states[state.value].append(file)
+    return FilesState.model_validate(states)
+
+
 if __name__ == "__main__":
     chunker = Chunkernizer(2000)
-    save_incremental_index(chunker.paths)
+    # save_incremental_index(chunker.paths)
+    # print(len(incremental_state(chunker.paths).deleted))
