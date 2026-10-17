@@ -16,7 +16,6 @@ from .models import (
 )
 from .cache import (
     save_cache_index,
-    laod_index_cache,
     load_cache_query,
     save_cache_query,
     save_incremental_index,

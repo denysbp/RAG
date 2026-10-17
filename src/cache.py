@@ -304,7 +304,7 @@ def apply_changed(
 def apply_deleted(
     file: str,
     master: List[MinimalSource]
-) -> None:
+) -> List[MinimalSource]:
     return [
         chunk for chunk in master
         if chunk.file_path != file
@@ -315,7 +315,7 @@ def apply_new(
     file: str,
     master: List[MinimalSource],
     chunker: Chunkernizer
-) -> None:
+) -> List[MinimalSource]:
     chunks = chunker.single_processor(file)
     if chunks:
         master.extend(chunks)
@@ -327,7 +327,7 @@ def apply_incremental_index(
     loader: JsonLoader,
     chunker: Chunkernizer,
 ) -> List[MinimalSource]:
-    master = loader.load("index.json")
+    master: List[MinimalSource] = loader.load("index.json").tolist()
 
     for file in files.deleted:
         master = apply_deleted(file, master)
@@ -338,6 +338,6 @@ def apply_incremental_index(
     for file in files.new:
         master = apply_new(file, master, chunker)
 
-    loader.save(list(master), "index.json")
+    loader.save(master, "index.json")
 
     return master
