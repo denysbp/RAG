@@ -2,7 +2,8 @@ from .rag import Rag
 from .exceptions import (
     ChunkError,
     CliError,
-    FileError
+    FileError,
+    CacheError
 )
 from fire import Fire
 from pydantic import ValidationError
@@ -15,8 +16,9 @@ if __name__ == "__main__":
         ChunkError,
         CliError,
         ValidationError,
-        FileError
+        FileError,
+        CacheError
     ) as e:
         print(e)
     except KeyboardInterrupt:
-        print("Program stoped")
+        print("Program stopped")

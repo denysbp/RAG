@@ -13,5 +13,5 @@ try:
     ]
 except KeyboardInterrupt:
     from sys import exit
-    print("Program Stoped")
+    print("Program Stopped")
     exit(1)

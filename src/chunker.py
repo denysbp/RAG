@@ -9,6 +9,8 @@ from .exceptions import FileError
 from inspect import cleandoc
 from tqdm import tqdm
 from nocamel.converters import to_sentence
+from rich.text import Text
+from rich import print as Print
 
 VALID_EXTENSIONS = {
     ".py",
@@ -19,6 +21,21 @@ VALID_EXTENSIONS = {
 
 class Chunkernizer:
     def __init__(self, chunk_size: int):
+        if chunk_size < 500:
+            msg = cleandoc(
+                """
+                We have a very large data source,
+                so issues such as crashes or slowdowns
+                may occur due to the very small number
+                of characters per chunk.
+                """
+            )
+            text = Text(
+                msg,
+                justify="right",
+                style="bold red"
+            )
+            Print(text)
         self.spliter = RecursiveCharacterTextSplitter(
             chunk_overlap=0,
             chunk_size=chunk_size,

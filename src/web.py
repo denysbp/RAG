@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from sys import exit
 from .rag import Rag
 from .exceptions import CliError, FileError
 from pydantic import ValidationError
@@ -16,6 +17,8 @@ def index(max_chunk_size: int) -> dict:
             status_code=403,
             detail=str(e)
         )
+    except KeyboardInterrupt:
+        exit(1)
 
 
 @app.post("/search/")
@@ -30,6 +33,8 @@ def search(query: str, k: int) -> List:
             status_code=403,
             detail=str(e.args[1])
         )
+    except KeyboardInterrupt:
+        exit(1)
 
 
 @app.post("/answer/")
@@ -46,3 +51,5 @@ def answer(query: str, k: int) -> dict:
             status_code=403,
             detail=str(e)
         )
+    except KeyboardInterrupt:
+        exit(1)

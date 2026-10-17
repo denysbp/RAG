@@ -56,7 +56,6 @@ class Rag:
                     """
                 )
             )
-
         self._chunker = Chunkernizer(value)
 
         if use_incremental(value):
