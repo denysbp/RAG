@@ -7,6 +7,10 @@ from .models import (
     FilesState,
     FileState
 )
+from .exceptions import (
+    FileError,
+    CacheError
+)
 from .loader import JsonLoader
 from .chunker import Chunkernizer
 from typing import (
@@ -47,15 +51,25 @@ def laod_index_cache(
         last_acess=last_acess,
         status="Using cached index"
     )
-    with open(CACHE_INDEX, "r") as file:
-        information = json.load(file)
-        if not information:
-            return False, None
-        last_index = IndexCache.model_validate(information)
-        return (
-            new_index.last_acess == last_index.last_acess
-            and new_index.max_chunk_size == last_index.max_chunk_size,
-            last_index
+    try:
+        with open(CACHE_INDEX, "r") as file:
+            information = json.load(file)
+            if not information:
+                return False, None
+            last_index = IndexCache.model_validate(information)
+            return (
+                new_index.last_acess == last_index.last_acess
+                and new_index.max_chunk_size == last_index.max_chunk_size,
+                last_index
+            )
+    except OSError:
+        raise FileError(
+            f"We can't open file: {CACHE_INDEX.absolute()}"
+        )
+    except ValidationError:
+        raise CacheError(
+            f"The models present on {CACHE_INDEX.absolute()} "
+            " were modified"
         )
 
 
@@ -64,17 +78,27 @@ def save_cache_index(
     max_chunk_size: int,
 ) -> None:
     path = Path(file_path)
-    CACHE_INDEX.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-    with open(CACHE_INDEX, "w") as file:
-        obj = IndexCache(
-            max_chunk_size=max_chunk_size,
-            last_acess=path.stat().st_mtime,
-            status="Using cached index"
+    try:
+        CACHE_INDEX.parent.mkdir(
+            parents=True,
+            exist_ok=True
         )
-        json.dump(obj.model_dump(), file, indent=2)
+        with open(CACHE_INDEX, "w") as file:
+            obj = IndexCache(
+                max_chunk_size=max_chunk_size,
+                last_acess=path.stat().st_mtime,
+                status="Using cached index"
+            )
+            json.dump(obj.model_dump(), file, indent=2)
+    except OSError:
+        raise FileError(
+            f"We can't write on the file: {CACHE_INDEX.absolute()}"
+        )
+    except ValidationError:
+        raise CacheError(
+            f"The models present on {CACHE_INDEX.absolute()} "
+            " were modified"
+        )
 
 
 def _query_key(query: str, k: int, chunk_size: int) -> str:
@@ -184,31 +208,28 @@ def file_hash(path: str) -> float:
     return Path(path).stat().st_mtime
 
 
-def get_chunks(file_path: str) -> List[MinimalSource]:
-    with MASTER_PATH.open("r", encoding="utf-8") as file:
-        return [
-            MinimalSource.model_validate(m)
-            for m in json.load(file)
-            if m["file_path"] == file_path
-        ]
-
-
 def save_incremental_index(files: Set[str], size: int) -> None:
-    INCREMENTAL_INDEX.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    sources: dict[Any, Any] = {}
-    for file in tqdm(files, desc="Saving cache"):
-        obj = IncrementalIndex(
-            file_path=file,
-            last_acess=file_hash(file),
-        ).model_dump()
-        sources[file] = obj
-    sources["paths"] = list(files)
-    sources["size"] = size
-    with open(INCREMENTAL_INDEX, "w") as file:
-        json.dump(sources, file, indent=2)
+    try:
+        INCREMENTAL_INDEX.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        sources: dict[Any, Any] = {}
+        for file in tqdm(files, desc="Saving cache"):
+            obj = IncrementalIndex(
+                file_path=file,
+                last_acess=file_hash(file),
+            ).model_dump()
+            sources[file] = obj
+        sources["paths"] = list(files)
+        sources["size"] = size
+        with open(INCREMENTAL_INDEX, "w") as file:
+            json.dump(sources, file, indent=2)
+    except OSError:
+        file = INCREMENTAL_INDEX.absolute
+        raise FileError(
+            f"We can't touch or write on the file: {file}"
+        )
 
 
 def get_state(file_path: str, data: IncrementalIndex) -> FileState:

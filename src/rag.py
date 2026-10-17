@@ -21,7 +21,8 @@ from .cache import (
     save_incremental_index,
     apply_incremental_index,
     incremental_state,
-    use_incremental
+    use_incremental,
+    laod_index_cache
 )
 import fire
 from typing import List, Dict, Tuple
@@ -61,7 +62,10 @@ class Rag:
         if use_incremental(value):
             files = incremental_state(set(self._chunker.paths))
 
-            if files is not None:
+            if files is not None and (
+                files.changed or files.deleted
+                or files.new
+            ):
                 master = apply_incremental_index(
                     files,
                     self._loader,
@@ -80,6 +84,19 @@ class Rag:
                     "chunks": len(master),
                     "directory": self._loader.chunk_dir + "/processed",
                 }
+            else:
+                path = self._loader.chunk_dir + "/processed/" + "index.json"
+                cond, model = laod_index_cache(
+                    path,
+                    max_chunk_size
+                )
+                if cond:
+                    size = self._loader.load("index.json").size
+                    return {
+                        "status": "Using cached index!",
+                        "chunks": size,
+                        "directory": self._loader.chunk_dir + "/processed",
+                    }
 
         self._chunker.files_processor()
 
@@ -477,6 +494,7 @@ class Rag:
             bm25s.tokenize(to_sentence(query)),
             k=k,
             show_progress=True,
+            n_threads=3
         )
         sources = []
         for doc_id in mapped_ids[0]:

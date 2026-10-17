@@ -16,3 +16,8 @@ class FileError(Exception):
 class ChunkError(Exception):
     def __init__(self, *args: str) -> None:
         super().__init__(self, *args)
+
+
+class CacheError(Exception):
+    def __init__(self, *args: str) -> None:
+        super().__init__(self, *args)
