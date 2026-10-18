@@ -25,13 +25,14 @@ from .cache import (
     laod_index_cache
 )
 import fire
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from inspect import cleandoc
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
 from nocamel.converters import to_sentence
 import numpy as np
+from collections import defaultdict
 
 
 MAX_CHARACTER = 5000
@@ -123,7 +124,11 @@ class Rag:
         k: int
     ) -> list[str]:
         self._numbers_validator(k)
-        result = self._search_query(query, k)
+        path = Path(self._loader.chunk_dir) / "processed" / "index.json"
+        if not path.exists():
+            raise FileError(f"You should index first, we didn't find {path}")
+        master = self._loader.load("index.json")
+        result = self._search_query(query, k, master)
         out_put = []
         for m in result.retrieved_sources:
             msg = m.file_path
@@ -131,6 +136,62 @@ class Rag:
             msg += f" {m.last_character_index}]"
             out_put.append(msg)
         return out_put
+
+    def semantic_search(self, query: str, k: int) -> list[str]:
+        self._numbers_validator(k)
+        path = Path(self._loader.chunk_dir) / "processed" / "index.json"
+        if not path.exists():
+            raise FileError(
+                f"You should index first, we didn't find {path}"
+            )
+        embeddings_path = Path("data/processed/embeddings.npy")
+        if not embeddings_path.exists():
+            raise FileError(
+                f"You should index first, we didn't find {embeddings_path}"
+            )
+        embeddings = np.load("data/processed/embeddings.npy")
+        master = self._loader.load("index.json")
+        sematic_model = SematicModel()
+        result = self._semantic_search(
+            query,
+            k,
+            sematic_model,
+            master,
+            embeddings
+        )
+        out_put = []
+        for m in result.retrieved_sources:
+            msg = m.file_path
+            msg += f" [{m.first_character_index}:"
+            msg += f" {m.last_character_index}]"
+            out_put.append(msg)
+        return out_put
+
+    def _hybrid_search(
+        self,
+        query: str,
+        k: int,
+        model: SematicModel,
+        master: np.ndarray[Any, Any],
+        embeddings: Any
+    ) -> List[MinimalSource]:
+        semantic = self._semantic_search(
+            query,
+            k,
+            model,
+            master,
+            embeddings
+        )
+        search = self._search_query(
+            query,
+            k,
+            master
+        )
+        final = self._reciprocal_rank_fusion(
+            semantic.retrieved_sources,
+            search.retrieved_sources
+        )
+        return final
 
     def search_dataset(
         self,
@@ -150,6 +211,12 @@ class Rag:
                 """
             )
             raise CliError(msg)
+        path_index = Path(self._loader.chunk_dir) / "processed" / "index.json"
+        if not path_index.exists():
+            raise FileError(f"You should index first, we didn't find {path}")
+        embeddings_path = Path("data/processed/embeddings.npy")
+        if not embeddings_path.exists():
+            raise FileError(f"You should index first, we didn't find {path}")
         with open(path, "r", encoding="utf-8") as file:
             questions = json.load(file)["rag_questions"]
             obj = [
@@ -161,25 +228,32 @@ class Rag:
             rag_questions=obj
         )
         search_results: List[MinimalSearchResults] = []
-
+        embeddings = np.load("data/processed/embeddings.npy")
+        master = self._loader.load("index.json")
+        sematic_model = SematicModel()
         for question in tqdm(
             data_set.rag_questions,
             desc="searching",
         ):
             try:
-                search_result = self._search_query(
+                retrived = self._hybrid_search(
                     question.question,
                     k,
+                    sematic_model,
+                    master,
+                    embeddings
                 )
             except TypeError:
                 raise CliError(
                     f"{question.question} This value broke the program"
                     f"We can't retrive it"
                 )
-
-            search_result.question_id = question.question_id
-
-            search_results.append(search_result)
+            model = MinimalSearchResults(
+                question_id=question.question_id,
+                question=question.question,
+                retrieved_sources=retrived[:k]
+            )
+            search_results.append(model)
 
         result = StudentSearchResults(
             search_results=search_results,
@@ -202,15 +276,40 @@ class Rag:
         if not query:
             raise CliError("Provide a usefull message")
         self._numbers_validator(k)
+        path = Path(self._loader.chunk_dir) / "processed" / "index.json"
+        if not path.exists():
+            raise FileError(
+                f"You should index first, we didn't find {path}"
+            )
+        embeddings_path = Path("data/processed/embeddings.npy")
+        if not embeddings_path.exists():
+            raise FileError(
+                f"You should index first, we didn't find {embeddings_path}"
+            )
+        embeddings = np.load("data/processed/embeddings.npy")
+        master = self._loader.load("index.json")
+        sematic_model = SematicModel()
+        question = UnansweredQuestion(question=query)
         try:
-            search = self._search_query(query, k)
+            search = self._hybrid_search(
+                question.question,
+                k,
+                sematic_model,
+                master,
+                embeddings
+            )
         except TypeError:
             raise CliError(
-                f"{query} This value broke the program"
+                f"{question.question} This value broke the program"
                 f"We can't retrive it"
             )
+        minimal = MinimalSearchResults(
+            question_id=question.question_id,
+            question=question.question,
+            retrieved_sources=search
+        )
         with tqdm(desc="Generating"):
-            obj = self._answer_question(search, query, QwenLlm())
+            obj = self._answer_question(minimal, query, QwenLlm())
         return obj
 
     def answer_dataset(
@@ -461,8 +560,10 @@ class Rag:
         self._retriver.save("data/processed/bm25", leave_progress=True)
         return master
 
-
-    def _build_hybrid_index(self, chunker: Chunkernizer) -> List[MinimalSource]:
+    def _build_hybrid_index(
+        self,
+        chunker: Chunkernizer
+    ) -> List[MinimalSource]:
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
@@ -473,15 +574,46 @@ class Rag:
         np.save("data/processed/embeddings.npy", embeddings)
         return master
 
+    def _semantic_search(
+        self,
+        query: str,
+        k: int,
+        model: SematicModel,
+        master: np.ndarray[Any, Any],
+        embeddings: Any
+    ) -> MinimalSearchResults:
+        if not query.strip():
+            raise CliError(
+                "Query can't be empty"
+            )
+        if k <= 0 or k > master.size:
+            raise CliError(
+                f"k: should be '> 0 and <= {master.size}' <index size>"
+            )
+        embeddings_query = model.encode([query])[0]
+        similaries = embeddings @ embeddings_query
+        best_indices = np.argsort(similaries)[::-1][:k]
+        result = [
+            master[i] for i in best_indices
+        ]
+        question = UnansweredQuestion(
+            question=query
+        )
+        return MinimalSearchResults(
+            question_id=question.question_id,
+            question=question.question,
+            retrieved_sources=result
+        )
+
     def _search_query(
         self,
         query: str,
         k: int,
+        master: np.ndarray[Any, Any]
     ) -> MinimalSearchResults:
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
-        master = self._loader.load("index.json")
         chunk_size = master.size
 
         cached = load_cache_query(
@@ -526,6 +658,22 @@ class Rag:
             search_results=result,
         )
         return result
+
+    def _reciprocal_rank_fusion(
+        self,
+        *list_ranks: List[MinimalSource],
+        k: int = 60
+    ) -> List[MinimalSource]:
+        rrf_map: dict[str, float] = defaultdict(float)
+        items_map = {}
+        for rank_list in list_ranks:
+            for rank, item in enumerate(rank_list, start=1):
+                key = item.text
+                rrf_map[key] += 1 / (rank + k)
+                items_map[key] = item
+
+        sorted_keys = sorted(rrf_map, key=lambda x: rrf_map[x], reverse=True)
+        return [items_map[key] for key in sorted_keys]
 
 
 if __name__ == "__main__":

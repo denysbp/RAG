@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast, Any
 from torch import (
     long,
     cuda,
@@ -10,8 +10,10 @@ from torch import (
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
+from typing import List
 
 CACHE = ".cache/"
+
 
 def get_configs() -> tuple:
     if cuda.is_available():
@@ -21,6 +23,7 @@ def get_configs() -> tuple:
         device = "cpu"
         dtype = float32
     return device, dtype
+
 
 class QwenLlm:
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
@@ -104,7 +107,7 @@ class QwenLlm:
 
 
 class SematicModel:
-    def __init__(self):
+    def __init__(self) -> None:
         self._device, _ = get_configs()
         self._model = SentenceTransformer(
             "sentence-transformers/all-MiniLM-L6-v2",
@@ -112,12 +115,11 @@ class SematicModel:
             cache_folder=CACHE
         )
 
-    def encode(self, sentence: str):
+    def encode(self, sentence: List[str]) -> Any:
         embeddings = self._model.encode(
             sentence,
             device=self._device,
             normalize_embeddings=True,
-            show_progress_bar=True,
             convert_to_numpy=True
         )
         return embeddings
