@@ -9,18 +9,24 @@ from torch import (
     inference_mode
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
 
+CACHE = ".cache/"
+
+def get_configs() -> tuple:
+    if cuda.is_available():
+        device = "cuda"
+        dtype = float16
+    else:
+        device = "cpu"
+        dtype = float32
+    return device, dtype
 
 class QwenLlm:
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self._tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-        if cuda.is_available():
-            self._device = "cuda"
-            dtype = float16
-        else:
-            self._device = "cpu"
-            dtype = float32
+        self._device, dtype = get_configs()
 
         self._model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -95,3 +101,23 @@ class QwenLlm:
 
         new_tokens = outputs[0, input_ids.shape[1]:]
         return self.decode(new_tokens)
+
+
+class SematicModel:
+    def __init__(self):
+        self._device, _ = get_configs()
+        self._model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            device=self._device,
+            cache_folder=CACHE
+        )
+
+    def encode(self, sentence: str):
+        embeddings = self._model.encode(
+            sentence,
+            device=self._device,
+            normalize_embeddings=True,
+            show_progress_bar=True,
+            convert_to_numpy=True
+        )
+        return embeddings

@@ -2,7 +2,7 @@ import json
 from .chunker import Chunkernizer
 from .loader import JsonLoader
 from src.exceptions import CliError, FileError
-from .llm import QwenLlm
+from .llm import QwenLlm, SematicModel
 from .models import (
     MinimalSource,
     MinimalSearchResults,
@@ -31,6 +31,7 @@ import bm25s
 from pathlib import Path
 from tqdm import tqdm
 from nocamel.converters import to_sentence
+import numpy as np
 
 
 MAX_CHARACTER = 5000
@@ -458,6 +459,18 @@ class Rag:
         tokens = bm25s.tokenize(corpus, leave=True)
         self._retriver.index(tokens, leave_progress=True)
         self._retriver.save("data/processed/bm25", leave_progress=True)
+        return master
+
+
+    def _build_hybrid_index(self, chunker: Chunkernizer) -> List[MinimalSource]:
+        master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
+        corpus = [s.text for s in master]
+        tokens = bm25s.tokenize(corpus, leave=True)
+        self._retriver.index(tokens, leave_progress=True)
+        self._retriver.save("data/processed/bm25", leave_progress=True)
+        model = SematicModel()
+        embeddings = model.encode(corpus)
+        np.save("data/processed/embeddings.npy", embeddings)
         return master
 
     def _search_query(
