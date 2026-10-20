@@ -30,7 +30,6 @@ from inspect import cleandoc
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
-from nocamel.converters import to_sentence
 import numpy as np
 from collections import defaultdict
 
@@ -40,12 +39,23 @@ INDEX_FILE = "data/processed/index.json"
 
 
 class Rag:
+    """Coordinate indexing, retrieval, evaluation, and answer generation."""
+
     def __init__(self) -> None:
+        """Initialize the loader and BM25 retriever."""
         self._chunker: Chunkernizer
         self._loader = JsonLoader()
-        self._retriver = bm25s.BM25(method="bm25l", k1=1.5, b=0.5)
+        self._retriver = bm25s.BM25(method="bm25l", k1=1, b=0.5)
 
     def index(self, max_chunk_size: int = 2000) -> dict:
+        """Build or update the document index.
+
+        Args:
+            max_chunk_size: Maximum number of characters per chunk.
+
+        Returns:
+            Status information about the indexing operation.
+        """
         self._numbers_validator(max_chunk_size)
 
         value = int(max_chunk_size)
@@ -72,6 +82,7 @@ class Rag:
                     self._loader,
                     self._chunker,
                 )
+                self._build_hybrid_index(self._chunker, show=True)
 
                 save_incremental_index(
                     set(self._chunker.paths),
@@ -101,7 +112,7 @@ class Rag:
 
         self._chunker.files_processor()
 
-        master = self._build_index(self._chunker)
+        master = self._build_hybrid_index(self._chunker, show=True)
 
         self._loader.save(master, "index.json")
 
@@ -123,6 +134,18 @@ class Rag:
         query: str,
         k: int
     ) -> list[str]:
+        """Search the indexed corpus using hybrid retrieval.
+
+        Args:
+            query: Text to search for.
+            k: Maximum number of source references to return.
+
+        Returns:
+            Formatted paths and character ranges for matching sources.
+
+        Raises:
+            FileError: If the corpus has not been indexed.
+        """
         self._numbers_validator(k)
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
@@ -138,6 +161,18 @@ class Rag:
         return out_put
 
     def semantic_search(self, query: str, k: int) -> list[str]:
+        """Search the indexed corpus using semantic similarity.
+
+        Args:
+            query: Text to search for.
+            k: Maximum number of source references to return.
+
+        Returns:
+            Formatted paths and character ranges for matching sources.
+
+        Raises:
+            FileError: If the corpus or embeddings have not been indexed.
+        """
         self._numbers_validator(k)
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
@@ -175,6 +210,18 @@ class Rag:
         master: np.ndarray[Any, Any],
         embeddings: Any
     ) -> List[MinimalSource]:
+        """Combine semantic and BM25 rankings with rank fusion.
+
+        Args:
+            query: Text to search for.
+            k: Number of final sources to return.
+            model: Semantic embedding model.
+            master: Indexed source models.
+            embeddings: Embeddings for the indexed sources.
+
+        Returns:
+            Sources ordered by the fused ranking.
+        """
         semantic = self._semantic_search(
             query,
             k,
@@ -199,6 +246,13 @@ class Rag:
         k: int = 0,
         save_directory: str = "",
     ) -> None:
+        """Search every question in a dataset and save the results.
+
+        Args:
+            dataset_path: Path to the dataset JSON file.
+            k: Number of sources to retrieve per question.
+            save_directory: Directory where results are written.
+        """
         if not self._numbers_validator(k):
             return
         path = Path(dataset_path)
@@ -273,6 +327,15 @@ class Rag:
         query: str = "",
         k: int = 0
     ) -> MinimalAnswer:
+        """Retrieve context and generate an answer for one question.
+
+        Args:
+            query: Question to answer.
+            k: Number of sources to retrieve.
+
+        Returns:
+            The generated answer and its retrieved sources.
+        """
         if not query:
             raise CliError("Provide a usefull message")
         self._numbers_validator(k)
@@ -317,6 +380,12 @@ class Rag:
         student_search_results_path: str = "",
         save_directory: str = ""
     ) -> None:
+        """Generate answers for a previously searched dataset.
+
+        Args:
+            student_search_results_path: Path to saved search results.
+            save_directory: Directory where answers are written.
+        """
         path = Path(student_search_results_path)
         if not Path(student_search_results_path).exists():
             msg = cleandoc(
@@ -368,6 +437,12 @@ class Rag:
         student_search_results_path: str = "",
         dataset_path: str = "",
     ) -> None:
+        """Evaluate retrieval recall against a validated dataset.
+
+        Args:
+            student_search_results_path: Path to saved search results.
+            dataset_path: Path to the ground-truth dataset.
+        """
         search_results, dataset = self._get_metrics(
             student_search_results_path,
             dataset_path,
@@ -455,6 +530,16 @@ class Rag:
         query: str,
         model: QwenLlm
     ) -> MinimalAnswer:
+        """Generate an answer from retrieved context.
+
+        Args:
+            search: Retrieved sources and question metadata.
+            query: Question text supplied to the language model.
+            model: Language model used to generate the answer.
+
+        Returns:
+            The generated answer with its retrieval metadata.
+        """
         prompt = self._build_prompt(
             query,
             search
@@ -476,6 +561,15 @@ class Rag:
         expected_source: MinimalSource | MinimalSourceDataset,
         retrieved_source: MinimalSource,
     ) -> bool:
+        """Check whether two source ranges overlap in the same file.
+
+        Args:
+            expected_source: Ground-truth source range.
+            retrieved_source: Retrieved source range.
+
+        Returns:
+            ``True`` when the ranges overlap.
+        """
         if expected_source.file_path != retrieved_source.file_path:
             return False
 
@@ -491,6 +585,15 @@ class Rag:
         question: str,
         search_results: MinimalSearchResults,
     ) -> List[Dict]:
+        """Build a grounded chat prompt from retrieved source text.
+
+        Args:
+            question: User question.
+            search_results: Retrieved sources used as context.
+
+        Returns:
+            System and user chat messages for the language model.
+        """
         context = ""
         for search in search_results.retrieved_sources:
             context += search.text + "\n\n"
@@ -519,6 +622,18 @@ class Rag:
         student_search_results_path: str,
         dataset_path: str
     ) -> Tuple[StudentSearchResults, List[CodeBaseResults]]:
+        """Load search results and ground-truth data for evaluation.
+
+        Args:
+            student_search_results_path: Path to saved search results.
+            dataset_path: Path to the ground-truth dataset.
+
+        Returns:
+            The validated search results and evaluation records.
+
+        Raises:
+            CliError: If either input path does not exist.
+        """
         path_search = Path(student_search_results_path)
         path_dataset = Path(dataset_path)
         if not path_dataset.exists():
@@ -535,6 +650,17 @@ class Rag:
         return search, dataset
 
     def _numbers_validator(self, value: str | int) -> bool:
+        """Validate that a command argument is an integer.
+
+        Args:
+            value: Value received from a command or API call.
+
+        Returns:
+            ``True`` when the value is a valid integer.
+
+        Raises:
+            CliError: If the value is not an integer.
+        """
         if not isinstance(value, int) or isinstance(
             value,
             bool
@@ -553,6 +679,14 @@ class Rag:
         return False
 
     def _build_index(self, chunker: Chunkernizer) -> List[MinimalSource]:
+        """Build and persist the BM25 index.
+
+        Args:
+            chunker: Chunker containing the source chunks.
+
+        Returns:
+            All chunks included in the index.
+        """
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
@@ -562,15 +696,25 @@ class Rag:
 
     def _build_hybrid_index(
         self,
-        chunker: Chunkernizer
+        chunker: Chunkernizer,
+        show: bool = False
     ) -> List[MinimalSource]:
+        """Build and persist both BM25 and semantic indexes.
+
+        Args:
+            chunker: Chunker containing the source chunks.
+            show: Whether to display embedding progress.
+
+        Returns:
+            All chunks included in the indexes.
+        """
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
         self._retriver.index(tokens, leave_progress=True)
         self._retriver.save("data/processed/bm25", leave_progress=True)
         model = SematicModel()
-        embeddings = model.encode(corpus)
+        embeddings = model.encode(corpus, show)
         np.save("data/processed/embeddings.npy", embeddings)
         return master
 
@@ -582,6 +726,18 @@ class Rag:
         master: np.ndarray[Any, Any],
         embeddings: Any
     ) -> MinimalSearchResults:
+        """Retrieve sources ranked by embedding similarity.
+
+        Args:
+            query: Text to search for.
+            k: Number of sources to retrieve.
+            model: Semantic embedding model.
+            master: Indexed source models.
+            embeddings: Embeddings for the indexed sources.
+
+        Returns:
+            Search results ordered by descending similarity.
+        """
         if not query.strip():
             raise CliError(
                 "Query can't be empty"
@@ -611,6 +767,19 @@ class Rag:
         k: int,
         master: np.ndarray[Any, Any]
     ) -> MinimalSearchResults:
+        """Retrieve sources ranked by BM25, using the query cache when valid.
+
+        Args:
+            query: Text to search for.
+            k: Number of sources to retrieve.
+            master: Indexed source models.
+
+        Returns:
+            Search results ordered by BM25 ranking.
+
+        Raises:
+            FileError: If the corpus has not been indexed.
+        """
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
@@ -635,7 +804,7 @@ class Rag:
             show_progress=True,
         )
         mapped_ids, _ = mapped.retrieve(
-            bm25s.tokenize(to_sentence(query)),
+            bm25s.tokenize(query),
             k=k,
             show_progress=True,
             n_threads=3
@@ -664,11 +833,24 @@ class Rag:
         *list_ranks: List[MinimalSource],
         k: int = 60
     ) -> List[MinimalSource]:
-        rrf_map: dict[str, float] = defaultdict(float)
-        items_map = {}
+        """Fuse one or more ranked source lists with RRF.
+
+        Args:
+            *list_ranks: Ranked source lists to combine.
+            k: RRF rank constant that controls score smoothing.
+
+        Returns:
+            Unique sources ordered by their fused score.
+        """
+        rrf_map: dict[tuple[str, int, int], float] = defaultdict(float)
+        items_map: dict[tuple[str, int, int], MinimalSource] = {}
         for rank_list in list_ranks:
             for rank, item in enumerate(rank_list, start=1):
-                key = item.text
+                key = (
+                    item.file_path,
+                    item.first_character_index,
+                    item.last_character_index,
+                )
                 rrf_map[key] += 1 / (rank + k)
                 items_map[key] = item
 

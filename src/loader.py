@@ -7,7 +7,10 @@ from .exceptions import FileError
 
 
 class JsonLoader:
+    """Load and save the project's JSON and NumPy-backed models."""
+
     def __init__(self) -> None:
+        """Initialize the default data directory."""
         self.chunk_dir: str = "data"
 
     def save(
@@ -17,6 +20,14 @@ class JsonLoader:
         dir: str = "processed",
         method: str = "normal"
     ) -> None:
+        """Serialize an object to a JSON file.
+
+        Args:
+            obj: Object or model collection to serialize.
+            prefix: Output filename or path.
+            dir: Data subdirectory used in normal mode.
+            method: ``"normal"`` for a path under the data directory.
+        """
         if method == "normal":
             out_path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
         else:
@@ -41,6 +52,19 @@ class JsonLoader:
         dir: str = "processed",
         obj: Any = MinimalSource
     ) -> np.ndarray[Any, Any]:
+        """Load a JSON collection into validated model instances.
+
+        Args:
+            prefix: JSON filename under the data directory.
+            dir: Data subdirectory containing the file.
+            obj: Pydantic model used to validate each item.
+
+        Returns:
+            An object-dtype NumPy array of validated models.
+
+        Raises:
+            FileError: If the JSON file cannot be read.
+        """
         try:
             path = Path(self.chunk_dir) / Path(dir) / Path(prefix)
             with open(path, "r") as file:
@@ -57,6 +81,17 @@ class JsonLoader:
         self,
         prefix: str,
     ) -> StudentSearchResults:
+        """Load serialized student search results.
+
+        Args:
+            prefix: Path to the search-results JSON file.
+
+        Returns:
+            Validated student search results.
+
+        Raises:
+            FileError: If the JSON file cannot be read.
+        """
         try:
             path = Path(prefix)
             with open(path, "r") as file:
@@ -72,6 +107,17 @@ class JsonLoader:
             self,
             prefix: str,
     ) -> list[CodeBaseResults]:
+        """Load and validate an evaluation dataset.
+
+        Args:
+            prefix: Path to the dataset JSON file.
+
+        Returns:
+            Validated code-base evaluation records.
+
+        Raises:
+            FileError: If the JSON file cannot be read.
+        """
         try:
             path = Path(prefix)
             with open(path, "r") as file:

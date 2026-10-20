@@ -10,6 +10,14 @@ rag = Rag()
 
 @app.post("/index/")
 def index(max_chunk_size: int) -> dict:
+    """Build the document index for the requested chunk size.
+
+    Args:
+        max_chunk_size: Maximum number of characters in each chunk.
+
+    Returns:
+        Indexing status information.
+    """
     try:
         return rag.index(max_chunk_size)
     except (CliError, FileError, ValidationError)as e:
@@ -23,6 +31,15 @@ def index(max_chunk_size: int) -> dict:
 
 @app.post("/search/")
 def search(query: str, k: int) -> List:
+    """Search the indexed corpus for a query.
+
+    Args:
+        query: Text to search for.
+        k: Maximum number of results to return.
+
+    Returns:
+        Matching source references.
+    """
     try:
         return rag.search(
             query,
@@ -39,6 +56,15 @@ def search(query: str, k: int) -> List:
 
 @app.post("/answer/")
 def answer(query: str, k: int) -> dict:
+    """Generate an answer grounded in indexed search results.
+
+    Args:
+        query: Question to answer.
+        k: Number of sources to retrieve.
+
+    Returns:
+        The question identifiers, question text, and generated answer.
+    """
     try:
         answer_result = rag.answer(query, k)
         return {

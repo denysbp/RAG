@@ -38,6 +38,19 @@ def laod_index_cache(
     file_path: str,
     max_chunk_size: int
 ) -> Tuple[bool, None | IndexCache]:
+    """Load and validate the cached index metadata.
+
+    Args:
+        file_path: Path to the indexed source used for freshness checks.
+        max_chunk_size: Chunk size expected by the cached index.
+
+    Returns:
+        A tuple containing whether the cache is valid and its metadata.
+
+    Raises:
+        FileError: If the cache metadata cannot be read.
+        CacheError: If the cached metadata no longer matches its model.
+    """
     path = Path(file_path)
     if not path.exists():
         return False, None
@@ -77,6 +90,16 @@ def save_cache_index(
     file_path: str,
     max_chunk_size: int,
 ) -> None:
+    """Persist metadata used to validate the document index cache.
+
+    Args:
+        file_path: Path to the indexed source whose modification time is saved.
+        max_chunk_size: Chunk size used to create the index.
+
+    Raises:
+        FileError: If the cache metadata cannot be written.
+        CacheError: If the cache metadata cannot be validated.
+    """
     path = Path(file_path)
     try:
         CACHE_INDEX.parent.mkdir(
@@ -102,6 +125,16 @@ def save_cache_index(
 
 
 def _query_key(query: str, k: int, chunk_size: int) -> str:
+    """Build a stable key for a cached search query.
+
+    Args:
+        query: Search text.
+        k: Maximum number of results.
+        chunk_size: Chunk size used by the index.
+
+    Returns:
+        A JSON-encoded cache key.
+    """
     return json.dumps(
         [query, k, chunk_size],
         ensure_ascii=False,
@@ -114,6 +147,17 @@ def load_cache_query(
     k: int,
     chunk_size: int,
 ) -> Optional[MinimalSearchResults]:
+    """Load a search result when its cache entry is still current.
+
+    Args:
+        file_path: Path to the indexed source used for freshness checks.
+        query: Search text.
+        k: Maximum number of results.
+        chunk_size: Chunk size used by the index.
+
+    Returns:
+        The cached search result, or ``None`` when no valid entry exists.
+    """
     path = Path(file_path)
 
     if not path.is_file() or not CACHE_QUERY.is_file():
@@ -163,6 +207,15 @@ def save_cache_query(
     chunk_size: int,
     search_results: MinimalSearchResults,
 ) -> None:
+    """Save a search result in the query cache.
+
+    Args:
+        file_path: Path to the indexed source used for freshness checks.
+        query: Search text.
+        k: Maximum number of results.
+        chunk_size: Chunk size used by the index.
+        search_results: Search result to cache.
+    """
     path = Path(file_path)
 
     if not path.is_file():
@@ -205,10 +258,27 @@ def save_cache_query(
 
 
 def file_hash(path: str) -> float:
+    """Return the modification time used as a file freshness marker.
+
+    Args:
+        path: File path to inspect.
+
+    Returns:
+        The file modification time.
+    """
     return Path(path).stat().st_mtime
 
 
 def save_incremental_index(files: Set[str], size: int) -> None:
+    """Persist per-file metadata for incremental indexing.
+
+    Args:
+        files: Files included in the current index.
+        size: Number of chunks in the current index.
+
+    Raises:
+        FileError: If the incremental cache cannot be written.
+    """
     try:
         INCREMENTAL_INDEX.parent.mkdir(
             parents=True,
@@ -233,6 +303,15 @@ def save_incremental_index(files: Set[str], size: int) -> None:
 
 
 def get_state(file_path: str, data: IncrementalIndex) -> FileState:
+    """Determine how a file differs from its cached metadata.
+
+    Args:
+        file_path: File path to compare.
+        data: Previously cached metadata for the file.
+
+    Returns:
+        The file's current incremental-index state.
+    """
     path = Path(file_path)
     if not path.exists():
         return FileState.DELETED
@@ -245,6 +324,14 @@ def get_state(file_path: str, data: IncrementalIndex) -> FileState:
 
 
 def use_incremental(max_chunk_size: int) -> bool:
+    """Check whether an incremental index can be reused.
+
+    Args:
+        max_chunk_size: Chunk size expected by the existing index.
+
+    Returns:
+        ``True`` when all required cache metadata is compatible.
+    """
     if not INCREMENTAL_INDEX.is_file():
         return False
 
@@ -274,6 +361,14 @@ def use_incremental(max_chunk_size: int) -> bool:
 
 
 def incremental_state(files: Set[str]) -> Optional[FilesState]:
+    """Classify files as unchanged, changed, new, or deleted.
+
+    Args:
+        files: Files currently found in the source directory.
+
+    Returns:
+        A summary of file changes, or ``None`` for an empty cache.
+    """
     states: dict[Any, List] = {}
     states[FileState.UNCHANGED.value] = []
     states[FileState.CHANGED.value] = []
@@ -308,6 +403,16 @@ def apply_changed(
     chunker: Chunkernizer,
     master: List[MinimalSource]
 ) -> List[MinimalSource]:
+    """Replace the chunks belonging to a changed file.
+
+    Args:
+        file: Changed file path.
+        chunker: Chunker used to process the file.
+        master: Current list of indexed chunks.
+
+    Returns:
+        The index chunks after replacing the file's entries.
+    """
     chunks = chunker.single_processor(file)
     if chunks is None:
         return []
@@ -326,6 +431,15 @@ def apply_deleted(
     file: str,
     master: List[MinimalSource]
 ) -> List[MinimalSource]:
+    """Remove all chunks belonging to a deleted file.
+
+    Args:
+        file: Deleted file path.
+        master: Current list of indexed chunks.
+
+    Returns:
+        The index without chunks from the deleted file.
+    """
     return [
         chunk for chunk in master
         if chunk.file_path != file
@@ -337,6 +451,16 @@ def apply_new(
     master: List[MinimalSource],
     chunker: Chunkernizer
 ) -> List[MinimalSource]:
+    """Add chunks for a newly discovered file.
+
+    Args:
+        file: New file path.
+        master: Current list of indexed chunks.
+        chunker: Chunker used to process the file.
+
+    Returns:
+        The index with chunks from the new file when processing succeeds.
+    """
     chunks = chunker.single_processor(file)
     if chunks:
         master.extend(chunks)
@@ -348,6 +472,16 @@ def apply_incremental_index(
     loader: JsonLoader,
     chunker: Chunkernizer,
 ) -> List[MinimalSource]:
+    """Apply all detected file changes to the persisted index.
+
+    Args:
+        files: Summary of incremental file changes.
+        loader: Loader used to read and write the index.
+        chunker: Chunker used to process changed and new files.
+
+    Returns:
+        The updated list of indexed chunks.
+    """
     master: List[MinimalSource] = loader.load("index.json").tolist()
 
     for file in files.deleted:

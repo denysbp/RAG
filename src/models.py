@@ -5,10 +5,7 @@ from typing import List
 
 
 class MinimalSource(BaseModel):
-    """
-    The MinimalSource model represents
-    a single source of information
-    """
+    """Represent one indexed source fragment and its character bounds."""
     file_path: str
     first_character_index: int
     last_character_index: int
@@ -16,23 +13,15 @@ class MinimalSource(BaseModel):
 
 
 class MinimalSourceDataset(BaseModel):
-    """
-    The MinimalSource model represents
-    a single source of information
-    """
+    """Represent source location metadata from an evaluation dataset."""
     file_path: str
     first_character_index: int
     last_character_index: int
 
 
-"""
-The UnansweredQuestion and
-AnsweredQuestion models represent an unanswered
-question and an answered question:
-"""
-
-
 class UnansweredQuestion(BaseModel):
+    """Represent a question that has not yet received an answer."""
+
     question_id: str = Field(
         default_factory=lambda: str(uuid.uuid4())
     )
@@ -40,64 +29,63 @@ class UnansweredQuestion(BaseModel):
 
 
 class AnsweredQuestion(UnansweredQuestion):
+    """Represent a question together with expected sources and an answer."""
+
     sources: List[MinimalSource | MinimalSourceDataset]
     answer: str
 
 
 class RagDataset(BaseModel):
-    """
-    The RagDataset model
-    represents a dataset of RAG questions
-    """
+    """Represent a collection of answered or unanswered RAG questions."""
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
 
 
 class CodeBaseResults(AnsweredQuestion):
+    """Represent an evaluated code-base question and its validity."""
+
     difficulty: str
     is_valid: bool
 
 
-"""
-The MinimalSearchResults and MinimalAnswer
-models represent the search results
-and an answer
-"""
-
-
 class MinimalSearchResults(BaseModel):
+    """Represent retrieved sources for one question."""
+
     question_id: str
     question: str
     retrieved_sources: List[MinimalSource]
 
 
 class MinimalAnswer(MinimalSearchResults):
+    """Represent search results together with a generated answer."""
+
     answer: str
 
 
-"""
-The StudentSearchResults and StudentSearchResultsAndAnswer
-models represent
-search results and search results with answers:
-"""
-
-
 class StudentSearchResults(BaseModel):
+    """Represent search results for a complete dataset search."""
+
     search_results: List[MinimalSearchResults]
     k: int
 
 
 class StudentSearchResultsAndAnswer(BaseModel):
+    """Represent dataset search results after answer generation."""
+
     search_results: List[MinimalAnswer]
     k: int
 
 
 class IndexCache(BaseModel):
+    """Represent metadata used to validate an index cache."""
+
     max_chunk_size: int
     last_acess: float
     status: str
 
 
 class QueryCache(BaseModel):
+    """Represent one cached query and its search result."""
+
     indexed: int
     query: str
     k: int
@@ -106,11 +94,15 @@ class QueryCache(BaseModel):
 
 
 class IncrementalIndex(BaseModel):
+    """Represent cached modification metadata for one source file."""
+
     file_path: str
     last_acess: float
 
 
 class FilesState(BaseModel):
+    """Represent files grouped by their incremental-index state."""
+
     unchanged: List[str] = Field(default_factory=list)
     changed: List[str] = Field(default_factory=list)
     new: List[str] = Field(default_factory=list)
@@ -119,6 +111,8 @@ class FilesState(BaseModel):
 
 
 class FileState(Enum):
+    """Enumerate possible states of a source file."""
+
     UNCHANGED = "unchanged"
     CHANGED = "changed"
     NEW = "new"
