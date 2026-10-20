@@ -21,7 +21,7 @@ The main objective is to understand how different retrieval strategies work, how
 
 ```
 1 — index the VLLM repository
-uv run python -m src index
+uv run python -m src index 2000
 
 2 — search a single question
 uv run python -m src search "How does the scheduler work in vLLM?" --k 5
@@ -42,12 +42,12 @@ uv run python -m src search_dataset \
 5 — evaluate retrieval quality (docs)
 uv run python -m src evaluate \
     data/output/search_results/dataset_docs_public.json \
-    data/datasets/AnsweredQuestions/dataset_docs_public.json --k 5
+    data/datasets/AnsweredQuestions/dataset_docs_public.json
 
 5.1 — evaluate retrieval quality (code)
 uv run python -m src evaluate \
     data/output/search_results/dataset_code_public.json \
-    data/datasets/AnsweredQuestions/dataset_code_public.json --k 5
+    data/datasets/AnsweredQuestions/dataset_code_public.json
 
 6 — generate answers for a dataset (docs)
 uv run python -m src answer_dataset \
@@ -99,6 +99,19 @@ uv run -m src index --max_chunk_size <int>
 ```
 
 The indexing process prepares the documents and creates the data required by the retrieval methods.
+
+### Retriver Methods
+
+#### TF-IDF
+- TF (Term Frequency) measures the frequency of a term within a document
+- IDF (Inverse Document Frequency) It gives more weight to terms that appear
+    in few documents and less weight to those that appear in many.
+
+#### BM25 (Best match 25)
+- Adjusts the relevance of a term by considering 3 factors:
+    - Frequency of the Term (TF): how many times it appears in the document
+    - Rarity of the term (IDF): How rare is the item in the collection
+    -Document Length: Compares the document's size to the average size of the documents in the collection.
 
 ### Searching with BM25
 

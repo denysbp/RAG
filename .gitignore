@@ -11,7 +11,6 @@ wheels/
 .idea/
 .vscode
 
-data/processed
-data/output/
+data/
 .mypy_cache
 .cache

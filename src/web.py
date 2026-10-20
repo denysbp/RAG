@@ -25,7 +25,7 @@ def index(max_chunk_size: int) -> dict:
             status_code=403,
             detail=str(e)
         )
-    except KeyboardInterrupt:
+    except BaseException:
         exit(1)
 
 
@@ -50,12 +50,12 @@ def search(query: str, k: int) -> List:
             status_code=403,
             detail=str(e.args[1])
         )
-    except KeyboardInterrupt:
+    except BaseException:
         exit(1)
 
 
 @app.post("/answer/")
-def answer(query: str, k: int) -> dict:
+def answer(query: str, k: int) -> str:
     """Generate an answer grounded in indexed search results.
 
     Args:
@@ -66,16 +66,12 @@ def answer(query: str, k: int) -> dict:
         The question identifiers, question text, and generated answer.
     """
     try:
-        answer_result = rag.answer(query, k)
-        return {
-            "question_id": answer_result.question_id,
-            "question": answer_result.question,
-            "answer": answer_result.answer
-        }
+        return rag.answer(query, k)
+
     except (CliError, ValidationError, FileError) as e:
         raise HTTPException(
             status_code=403,
             detail=str(e)
         )
-    except KeyboardInterrupt:
+    except BaseException:
         exit(1)

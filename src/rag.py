@@ -150,6 +150,10 @@ class Rag:
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
             raise FileError(f"You should index first, we didn't find {path}")
+        if not query:
+            raise CliError(
+                "Please provide a usefull message"
+            )
         master = self._loader.load("index.json")
         result = self._search_query(query, k, master)
         out_put = []
@@ -222,6 +226,10 @@ class Rag:
         Returns:
             Sources ordered by the fused ranking.
         """
+        if not query:
+            raise CliError(
+                "Please provide a usefull message"
+            )
         semantic = self._semantic_search(
             query,
             k,
@@ -326,7 +334,7 @@ class Rag:
         self,
         query: str = "",
         k: int = 0
-    ) -> MinimalAnswer:
+    ) -> str:
         """Retrieve context and generate an answer for one question.
 
         Args:
@@ -337,7 +345,9 @@ class Rag:
             The generated answer and its retrieved sources.
         """
         if not query:
-            raise CliError("Provide a usefull message")
+            raise CliError(
+                "Please provide a usefull message"
+            )
         self._numbers_validator(k)
         path = Path(self._loader.chunk_dir) / "processed" / "index.json"
         if not path.exists():
@@ -373,7 +383,7 @@ class Rag:
         )
         with tqdm(desc="Generating"):
             obj = self._answer_question(minimal, query, QwenLlm())
-        return obj
+        return obj.answer
 
     def answer_dataset(
         self,

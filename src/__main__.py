@@ -22,3 +22,5 @@ if __name__ == "__main__":
         print(e)
     except KeyboardInterrupt:
         print("Program stopped")
+    except Exception as e:
+        print(f"A Error occurred: {e}")
