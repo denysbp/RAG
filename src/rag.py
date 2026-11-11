@@ -719,6 +719,8 @@ class Rag:
             All chunks included in the indexes.
         """
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
+        if not master:
+            master = self._loader.load("index.json")
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
         self._retriver.index(tokens, leave_progress=True)
