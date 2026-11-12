@@ -1,4 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    status
+)
 from sys import exit
 from .rag import Rag
 from .exceptions import CliError, FileError
@@ -22,7 +26,7 @@ def index(max_chunk_size: int) -> dict:
         return rag.index(max_chunk_size)
     except (CliError, FileError, ValidationError)as e:
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_403_BAD_REQUEST,
             detail=str(e)
         )
     except BaseException:
@@ -47,7 +51,7 @@ def search(query: str, k: int) -> List:
         )
     except (FileError, ValidationError) as e:
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_403_BAD_REQUEST,
             detail=str(e.args[1])
         )
     except BaseException:
@@ -70,7 +74,7 @@ def answer(query: str, k: int) -> str:
 
     except (CliError, ValidationError, FileError) as e:
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_403_BAD_REQUEST,
             detail=str(e)
         )
     except BaseException:

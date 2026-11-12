@@ -2,6 +2,7 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     Language,
 )
+from langchain_core.documents import Document
 from pathlib import Path
 from typing import Set, List, Optional
 from .models import MinimalSource
@@ -87,16 +88,7 @@ class Chunkernizer:
         documents = self.spliter.create_documents([text])
         chunks = []
         for document in documents:
-            source = document.page_content
-            start = document.metadata["start_index"]
-            end = start + len(source)
-            model = MinimalSource.model_validate({
-                "file_path": path,
-                "first_character_index": start,
-                "last_character_index": end,
-                "text": source.lower()
-            })
-            chunks.append(model)
+            chunks.append(self._build_model(document, path))
         return chunks
 
     def _chunk_python_file(self, text: str, path: str) -> List[MinimalSource]:
@@ -112,17 +104,20 @@ class Chunkernizer:
         documents = self.py_spliter.create_documents([text])
         py_chunks = []
         for document in documents:
-            source = document.page_content
-            start = document.metadata["start_index"]
-            end = start + len(source)
-            model = MinimalSource.model_validate({
-                "file_path": path,
-                "first_character_index": start,
-                "last_character_index": end,
-                "text": source.lower()
-            })
-            py_chunks.append(model)
+            py_chunks.append(self._build_model(document, path))
         return py_chunks
+
+    def _build_model(self, document: Document, path: str) -> MinimalSource:
+        source = document.page_content
+        start = document.metadata["start_index"]
+        end = start + len(source)
+        model = MinimalSource.model_validate({
+            "file_path": path,
+            "first_character_index": start,
+            "last_character_index": end,
+            "text": source.lower()
+        })
+        return model
 
     def _chunk_markdown_file(
         self,
@@ -141,16 +136,7 @@ class Chunkernizer:
         documents = self.md_spliter.create_documents([text])
         md_chunks = []
         for document in documents:
-            source = document.page_content
-            start = document.metadata["start_index"]
-            end = start + len(source)
-            model = MinimalSource.model_validate({
-                "file_path": path,
-                "first_character_index": start,
-                "last_character_index": end,
-                "text": source.lower()
-            })
-            md_chunks.append(model)
+            md_chunks.append(self._build_model(document, path))
         return md_chunks
 
     def _load_file(self, path: str) -> str:

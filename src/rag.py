@@ -25,7 +25,7 @@ from .cache import (
     laod_index_cache
 )
 import fire
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, cast
 from inspect import cleandoc
 import bm25s
 from pathlib import Path
@@ -720,7 +720,7 @@ class Rag:
         """
         master = [*chunker.md_chunks, *chunker.chunks, *chunker.py_chunks]
         if not master:
-            master = self._loader.load("index.json")
+            master = cast(List[MinimalSource], self._loader.load("index.json"))
         corpus = [s.text for s in master]
         tokens = bm25s.tokenize(corpus, leave=True)
         self._retriver.index(tokens, leave_progress=True)

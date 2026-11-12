@@ -142,6 +142,8 @@ class QwenLlm:
             enable_thinking=enable_thinking,
         )
 
+        # By default, PyTorch can track mathematical
+        # operations to calculate gradients during training
         with inference_mode():
             outputs = self._model.generate(  # type: ignore[misc]
                 input_ids=input_ids,
@@ -179,6 +181,9 @@ class SematicModel:
         Returns:
             The generated sentence embeddings.
         """
+
+        # If two vectors are normalized,
+        # the dot product between them is equal to the cosine similarity.
         embeddings = self._model.encode(
             sentence,
             device=self._device,
